@@ -1,0 +1,43 @@
+# SmartCutElf 依赖包列表
+
+# GUI框架
+PyQt5==5.15.10
+PyQt5-Qt5==5.15.2
+PyQt5-sip==12.13.0
+
+# 视频处理
+opencv-python==4.8.1.78
+imageio==2.31.5
+imageio-ffmpeg==0.4.9
+
+# 音频处理
+pydub==0.25.1
+
+# AI和机器学习
+openai-whisper==20231117
+torch==2.1.0
+torchaudio==2.1.0
+numpy==1.24.3
+
+# 语音合成
+pyttsx3==2.90
+
+# 数据处理
+pillow==10.1.0
+scipy==1.11.4
+
+# 数据库
+# SQLite3 已包含在Python标准库中
+
+# 系统工具
+psutil==5.9.6
+requests==2.31.0
+
+# 日志和配置
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# 开发工具
+pytest==7.4.3
+pytest-qt==4.2.0
+black==23.11.0

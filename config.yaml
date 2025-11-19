@@ -1,0 +1,62 @@
+# SmartCutElf 配置文件
+
+# 应用设置
+app:
+  name: SmartCutElf
+  version: 1.0.0
+  language: zh_CN
+
+# 处理设置
+processing:
+  max_workers: 4
+  target_duration_min: 180  # 3分钟
+  target_duration_max: 300  # 5分钟
+  segment_duration: 10  # 片段分析时长（秒）
+  auto_delete_temp: true
+
+# 输出设置
+output:
+  folder: output
+  format: mp4
+  resolution: 1080p
+  fps: 30
+  video_codec: libx264
+  audio_codec: aac
+  bitrate: 5000k
+
+# 高光检测设置
+highlight:
+  sensitivity: medium  # low, medium, high
+  audio_weight: 0.4
+  video_weight: 0.4
+  time_weight: 0.2
+
+# 字幕设置
+subtitle:
+  enabled: true
+  font_name: Microsoft YaHei
+  font_size: medium  # small, medium, large
+  font_color: white
+  position: bottom
+  outline: true
+  outline_color: black
+
+# 语音设置
+speech:
+  recognition_model: base  # tiny, base, small, medium, large
+  tts_enabled: false
+  tts_voice: female
+  background_music: false
+  music_volume: 30
+
+# UI设置
+ui:
+  theme: dark  # light, dark
+  window_width: 1400
+  window_height: 900
+
+# 性能设置
+performance:
+  memory_limit_mb: 2048
+  cache_enabled: true
+  cache_size_mb: 500
