@@ -3,7 +3,6 @@
 使用OpenAI Whisper进行语音转文字
 """
 
-import whisper
 from typing import List, Dict, Optional
 from pathlib import Path
 from utils.logger import LoggerMixin
@@ -22,7 +21,26 @@ class SpeechRecognizer(LoggerMixin):
         super().__init__()
         self.model_size = model_size
         self.model = None
-        self._load_model()
+        self.whisper = None  # 延迟导入
+    
+    def _load_model(self):
+        """加载Whisper模型"""
+        # 延迟导入whisper
+        if self.whisper is None:
+            try:
+                import whisper
+                self.whisper = whisper
+            except ImportError:
+                self.logger.error("Whisper未安装，请运行: pip install openai-whisper")
+                raise ImportError("需要安装openai-whisper: pip install openai-whisper")
+        
+        try:
+            self.logger.info(f"正在加载Whisper模型: {self.model_size}")
+            self.model = self.whisper.load_model(self.model_size)
+            self.logger.info("模型加载成功")
+        except Exception as e:
+            self.logger.error(f"模型加载失败: {e}")
+            raise
     
     def _load_model(self):
         """加载Whisper模型"""

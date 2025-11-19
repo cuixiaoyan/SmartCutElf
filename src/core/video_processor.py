@@ -22,8 +22,35 @@ class VideoProcessor(LoggerMixin):
             ffprobe_path: FFprobe可执行文件路径
         """
         super().__init__()
-        self.ffmpeg_path = ffmpeg_path
-        self.ffprobe_path = ffprobe_path
+        
+        # 尝试查找FFmpeg
+        self.ffmpeg_path = self._find_ffmpeg(ffmpeg_path)
+        self.ffprobe_path = self._find_ffmpeg(ffprobe_path)
+    
+    def _find_ffmpeg(self, default_name: str) -> str:
+        """查找FFmpeg可执行文件"""
+        import shutil
+        
+        # 首先尝试在PATH中查找
+        found = shutil.which(default_name)
+        if found:
+            return default_name
+        
+        # 尝试常见的安装路径
+        common_paths = [
+            r"D:\ffmpeg-master-latest-win64-gpl-shared\bin",
+            r"C:\ffmpeg\bin",
+            r"C:\Program Files\ffmpeg\bin",
+        ]
+        
+        for path in common_paths:
+            exe_path = Path(path) / f"{default_name}.exe"
+            if exe_path.exists():
+                self.logger.info(f"找到FFmpeg: {exe_path}")
+                return str(exe_path)
+        
+        # 如果都找不到，返回默认值（会在后续抛出错误）
+        return default_name
     
     def get_video_info(self, video_path: str) -> Optional[Dict]:
         """
@@ -45,7 +72,15 @@ class VideoProcessor(LoggerMixin):
                 video_path
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            # 修复Windows编码问题
+            result = subprocess.run(
+                cmd, 
+                capture_output=True, 
+                text=True, 
+                encoding='utf-8',
+                errors='ignore',  # 忽略无法解码的字符
+                check=True
+            )
             data = json.loads(result.stdout)
             
             # 提取视频流信息
@@ -124,7 +159,7 @@ class VideoProcessor(LoggerMixin):
                 output_path
             ]
             
-            subprocess.run(cmd, capture_output=True, check=True)
+            subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
             self.logger.info(f"音频提取成功: {output_path}")
             return True
             
@@ -170,7 +205,7 @@ class VideoProcessor(LoggerMixin):
                     str(segment_file)
                 ]
                 
-                subprocess.run(cmd, capture_output=True, check=True)
+                subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
                 segment_files.append(segment_file)
                 self.logger.debug(f"片段 {i+1}/{len(segments)} 剪切完成")
             
@@ -224,7 +259,7 @@ class VideoProcessor(LoggerMixin):
                 output_path
             ]
             
-            subprocess.run(cmd, capture_output=True, check=True)
+            subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
             concat_file.unlink()  # 删除临时文件列表
             return True
             

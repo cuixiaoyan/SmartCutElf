@@ -485,7 +485,7 @@ class MainWindow(QMainWindow):
         if failed_count > 0:
             self.add_status_message(f"\n❌ 处理失败的文件:")
             for i, result in enumerate([r for r in results if not r.get('success')], 1):
-                input_file = Path(result['input_path']).name
+                input_file = Path(result.get('input_path', '未知文件')).name if result.get('input_path') else '未知文件'
                 error = result.get('error', '未知错误')
                 self.add_status_message(f"   {i}. {input_file} - {error}")
         

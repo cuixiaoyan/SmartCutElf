@@ -10,8 +10,7 @@ opencv-python==4.8.1.78
 imageio==2.31.5
 imageio-ffmpeg==0.4.9
 
-# 音频处理
-pydub==0.25.1
+# 音频处理 - 使用scipy替代pydub以兼容Python 3.13
 
 # AI和机器学习
 openai-whisper==20231117

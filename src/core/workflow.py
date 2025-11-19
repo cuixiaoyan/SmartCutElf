@@ -65,12 +65,34 @@ class VideoProcessingWorkflow(LoggerMixin):
             # 1. 验证文件
             valid, error = self.file_manager.validate_file(video_path)
             if not valid:
-                return {'success': False, 'error': f'文件验证失败: {error}'}
+                return {
+                    'success': False, 
+                    'error': f'文件验证失败: {error}',
+                    'input_path': video_path
+                }
             
             # 2. 获取视频信息
-            video_info = self.video_processor.get_video_info(video_path)
+            try:
+                video_info = self.video_processor.get_video_info(video_path)
+            except FileNotFoundError:
+                return {
+                    'success': False,
+                    'error': 'FFmpeg未安装或不在系统PATH中，请先安装FFmpeg',
+                    'input_path': video_path
+                }
+            except Exception as e:
+                return {
+                    'success': False,
+                    'error': f'读取视频信息失败: {str(e)}',
+                    'input_path': video_path
+                }
+            
             if not video_info:
-                return {'success': False, 'error': '无法获取视频信息'}
+                return {
+                    'success': False, 
+                    'error': '无法获取视频信息',
+                    'input_path': video_path
+                }
             
             self.logger.info(f"视频时长: {video_info['duration']:.2f}秒")
             
@@ -87,7 +109,9 @@ class VideoProcessingWorkflow(LoggerMixin):
             )
             
             if not highlight_result['success']:
-                return highlight_result
+                result = highlight_result.copy()
+                result['input_path'] = video_path
+                return result
             
             # 4. 剪辑视频
             output_dir = self.config.get('output.folder', 'output')
@@ -102,7 +126,11 @@ class VideoProcessingWorkflow(LoggerMixin):
             )
             
             if not success:
-                return {'success': False, 'error': '视频剪辑失败'}
+                return {
+                    'success': False, 
+                    'error': '视频剪辑失败',
+                    'input_path': video_path
+                }
             
             # 5. 生成字幕（如果启用）
             subtitle_path = None
@@ -130,7 +158,11 @@ class VideoProcessingWorkflow(LoggerMixin):
             
         except Exception as e:
             self.logger.error(f"视频处理失败: {e}", exc_info=True)
-            return {'success': False, 'error': str(e)}
+            return {
+                'success': False, 
+                'error': str(e),
+                'input_path': video_path
+            }
     
     def _generate_subtitles(self, video_path: str, output_video_path: str) -> Optional[str]:
         """
