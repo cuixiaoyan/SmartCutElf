@@ -148,6 +148,11 @@ class VideoProcessor(LoggerMixin):
             是否成功
         """
         try:
+            # 验证输入文件
+            if not Path(video_path).exists():
+                self.logger.error(f"视频文件不存在: {video_path}")
+                return False
+            
             cmd = [
                 self.ffmpeg_path,
                 '-i', video_path,
@@ -159,12 +164,32 @@ class VideoProcessor(LoggerMixin):
                 output_path
             ]
             
-            subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
-            self.logger.info(f"音频提取成功: {output_path}")
+            self.logger.debug(f"音频提取命令: {' '.join(cmd)}")
+            
+            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore')
+            
+            if result.returncode != 0:
+                error_msg = f"音频提取失败 (returncode: {result.returncode})\n"
+                error_msg += f"stderr: {result.stderr}\n"
+                error_msg += f"stdout: {result.stdout}"
+                self.logger.error(error_msg)
+                return False
+            
+            # 验证输出文件
+            if not Path(output_path).exists():
+                self.logger.error(f"音频文件未创建: {output_path}")
+                return False
+            
+            file_size = Path(output_path).stat().st_size
+            if file_size == 0:
+                self.logger.error(f"音频文件为空: {output_path}")
+                return False
+            
+            self.logger.info(f"音频提取成功: {output_path} ({file_size/1024:.1f}KB)")
             return True
             
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"音频提取失败: {e.stderr}")
+        except Exception as e:
+            self.logger.error(f"音频提取异常: {e}")
             return False
     
     def cut_video(self, video_path: str, output_path: str, 
@@ -184,58 +209,261 @@ class VideoProcessor(LoggerMixin):
             self.logger.error("没有提供剪辑片段")
             return False
         
+        import shutil
+        import time
+        
+        temp_dir = None
         try:
+            # 验证FFmpeg可用性
+            try:
+                test_result = subprocess.run([self.ffmpeg_path, '-version'], 
+                                           capture_output=True, timeout=10)
+                if test_result.returncode != 0:
+                    raise Exception(f"FFmpeg不可用: {self.ffmpeg_path}")
+            except Exception as e:
+                raise Exception(f"FFmpeg检查失败: {e}")
+            
+            # 验证时间段有效性
+            for i, (start, end) in enumerate(segments):
+                if start < 0 or end <= start:
+                    raise Exception(f"无效的时间段 {i+1}: {start:.2f}-{end:.2f}秒")
+                if end - start < 0.5:
+                    self.logger.warning(f"时间段 {i+1} 过短: {end-start:.2f}秒")
+            
+            self.logger.info(f"开始剪切 {len(segments)} 个片段")
+            
             # 创建临时分段文件列表
-            temp_dir = Path(output_path).parent / "temp_segments"
-            temp_dir.mkdir(exist_ok=True)
+            # 使用Windows TEMP目录避免中文路径问题（FFmpeg在Windows上无法正确处理Unicode路径）
+            import tempfile
+            temp_dir = Path(tempfile.mkdtemp(prefix="smartcut_segments_"))
+            self.logger.info(f"临时目录已创建: {temp_dir}")
             
             segment_files = []
+            failed_segments = []
+            successful_count = 0
             
             # 剪切每个片段
             for i, (start, end) in enumerate(segments):
-                segment_file = temp_dir / f"segment_{i:04d}.mp4"
+                # 使用原始索引作为临时文件名
+                temp_segment_file = temp_dir / f"temp_segment_{i:04d}.mp4"
+                duration = end - start
                 
                 # 使用重新编码而不是复制编码，避免关键帧问题导致的白屏
                 # -ss 放在 -i 之前可以更快，但可能不精确
                 # -ss 放在 -i 之后更精确，但稍慢
+                # 构建 FFmpeg 命令
                 cmd = [
                     self.ffmpeg_path,
-                    '-ss', str(start),  # 先定位到开始位置
+                    '-ss', f"{start:.3f}",  # 精确到毫秒
                     '-i', video_path,
-                    '-t', str(end - start),  # 使用持续时间而不是结束时间
+                    '-t', f"{duration:.3f}",  # 精确的持续时间
                     '-c:v', 'libx264',  # 重新编码视频
                     '-preset', 'fast',  # 快速编码
-                    '-crf', '23',  # 质量控制（18-28，越小质量越好）
+                    '-crf', '23',  # 质量控制
                     '-c:a', 'aac',  # 音频编码
                     '-b:a', '192k',  # 音频比特率
                     '-movflags', '+faststart',  # 优化网络播放
-                    '-y',
-                    str(segment_file)
+                    '-avoid_negative_ts', 'make_zero',  # 处理负时间戳
+                    '-y',  # 覆盖输出文件
+                    str(temp_segment_file)
                 ]
                 
-                subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
-                segment_files.append(segment_file)
-                self.logger.debug(f"片段 {i+1}/{len(segments)} 剪切完成")
+                self.logger.debug(f"正在剪切片段 {i+1}/{len(segments)}: {start:.2f}-{end:.2f}s ({duration:.2f}s)")
+                self.logger.debug(f"FFmpeg命令: {' '.join(cmd)}")
+                
+                try:
+                    result = subprocess.run(cmd, capture_output=True, encoding='utf-8', 
+                                          errors='replace', timeout=300)  # 5分钟超时
+                except subprocess.TimeoutExpired:
+                    self.logger.warning(f"片段 {i+1} 剪切超时，跳过")
+                    failed_segments.append({
+                        'index': i,
+                        'start': start,
+                        'end': end,
+                        'error': 'Timeout'
+                    })
+                    continue
+                
+                if result.returncode != 0:
+                    # 尝试使用备用策略
+                    self.logger.warning(f"片段 {i+1} 标准剪切失败，尝试备用策略")
+                    
+                    # 备用命令：使用复制模式，更保守的参数
+                    backup_cmd = [
+                        self.ffmpeg_path,
+                        '-ss', f"{start:.3f}",
+                        '-i', video_path,
+                        '-t', f"{duration:.3f}",
+                        '-c', 'copy',  # 复制模式，不重新编码
+                        '-avoid_negative_ts', 'make_zero',
+                        '-y',
+                        str(temp_segment_file)
+                    ]
+                    
+                    self.logger.debug(f"备用FFmpeg命令: {' '.join(backup_cmd)}")
+                    
+                    try:
+                        backup_result = subprocess.run(backup_cmd, capture_output=True, 
+                                                     encoding='utf-8', errors='replace', timeout=300)
+                        
+                        if backup_result.returncode != 0:
+                            # 两种方法都失败，记录并跳过
+                            # 提取真正的错误信息（跳过版本信息）
+                            stderr_lines = result.stderr.split('\n') if result.stderr else []
+                            error_lines = [line for line in stderr_lines if line and not line.startswith('ffmpeg version') and not line.startswith('  built') and not line.startswith('  configuration')]
+                            actual_error = '\n'.join(error_lines[-5:]) if error_lines else 'No error message'
+                            
+                            error_msg = f"片段 {i+1} 剪切失败 (标准和备用方法都失败)\n"
+                            error_msg += f"时间段: {start:.2f}-{end:.2f}s (时长: {duration:.2f}s)\n"
+                            error_msg += f"错误: {actual_error}"
+                            self.logger.warning(error_msg)
+                            
+                            failed_segments.append({
+                                'index': i,
+                                'start': start,
+                                'end': end,
+                                'error': result.stderr[:100] if result.stderr else 'Unknown'
+                            })
+                            
+                            # 跳过这个片段，继续下一个
+                            self.logger.info(f"跳过片段 {i+1}，继续处理下一个")
+                            continue
+                        else:
+                            self.logger.info(f"片段 {i+1} 备用策略成功")
+                    
+                    except subprocess.TimeoutExpired:
+                        self.logger.warning(f"片段 {i+1} 备用剪切超时，跳过")
+                        failed_segments.append({
+                            'index': i,
+                            'start': start,
+                            'end': end,
+                            'error': 'Timeout'
+                        })
+                        continue
+                
+                # 等待文件系统完成写入
+                time.sleep(0.3)
+                
+                # 验证文件是否创建成功
+                max_wait = 10  # 最多等待10秒
+                wait_count = 0
+                while not temp_segment_file.exists() and wait_count < max_wait:
+                    time.sleep(0.5)
+                    wait_count += 1
+                
+                if not temp_segment_file.exists():
+                    self.logger.warning(f"片段文件未创建: {temp_segment_file}，跳过")
+                    failed_segments.append({
+                        'index': i,
+                        'start': start,
+                        'end': end,
+                        'error': 'File not created'
+                    })
+                    continue
+                
+                file_size = temp_segment_file.stat().st_size
+                if file_size == 0:
+                    self.logger.warning(f"片段文件为空: {temp_segment_file}，跳过")
+                    failed_segments.append({
+                        'index': i,
+                        'start': start,
+                        'end': end,
+                        'error': 'Empty file'
+                    })
+                    # 删除空文件
+                    try:
+                        temp_segment_file.unlink()
+                    except:
+                        pass
+                    continue
+                
+                # 重命名为连续编号
+                final_segment_file = temp_dir / f"segment_{successful_count:04d}.mp4"
+                self.logger.debug(f"准备重命名: {temp_segment_file.name} -> {final_segment_file.name} (successful_count={successful_count})")
+                try:
+                    # 如果目标文件已存在，先删除
+                    if final_segment_file.exists():
+                        final_segment_file.unlink()
+                    
+                    shutil.move(str(temp_segment_file), str(final_segment_file))
+                    self.logger.debug(f"重命名成功: {temp_segment_file.name} -> {final_segment_file.name}")
+                    
+                    # 验证重命名成功
+                    if not final_segment_file.exists():
+                        raise Exception("重命名后文件不存在")
+                    
+                except Exception as e:
+                    self.logger.error(f"重命名失败: {e}")
+                    # 如果重命名失败，跳过这个片段
+                    failed_segments.append({
+                        'index': i,
+                        'start': start,
+                        'end': end,
+                        'error': f'Rename failed: {e}'
+                    })
+                    continue
+                
+                segment_files.append(final_segment_file)
+                successful_count += 1
+                self.logger.info(f"片段 {i+1}/{len(segments)} 剪切成功: {final_segment_file.name}, {file_size/1024/1024:.2f}MB (成功: {successful_count})")
             
-            # 合并所有片段
+            # 检查是否有足够的成功片段
+            if not segment_files:
+                error_msg = f"所有片段都剪切失败，无法继续\n"
+                error_msg += f"失败片段数: {len(failed_segments)}\n"
+                for fail in failed_segments[:3]:  # 只显示前3个
+                    error_msg += f"  - 片段 {fail['index']+1}: {fail['start']:.1f}-{fail['end']:.1f}s, 错误: {fail['error']}\n"
+                raise Exception(error_msg)
+            
+            if failed_segments:
+                self.logger.warning(
+                    f"有 {len(failed_segments)} 个片段失败，但有 {len(segment_files)} 个成功，继续合并"
+                )
+                # 显示成功的文件列表
+                self.logger.info(f"成功的片段: {[f.name for f in segment_files]}")
+            
+            # 再次等待确保所有文件句柄已释放
+            time.sleep(0.2)
+            
+            # 合并所有成功的片段
             if len(segment_files) == 1:
                 # 只有一个片段，直接移动
-                import shutil
                 shutil.move(str(segment_files[0]), output_path)
             else:
                 # 多个片段，需要合并
-                self._concat_videos(segment_files, output_path)
+                if not self._concat_videos(segment_files, output_path):
+                    raise Exception("视频合并失败")
             
-            # 清理临时文件
-            import shutil
-            shutil.rmtree(temp_dir)
+            # 验证输出文件
+            if not Path(output_path).exists():
+                raise Exception(f"输出文件未创建: {output_path}")
             
             self.logger.info(f"视频剪辑完成: {output_path}")
             return True
             
         except Exception as e:
-            self.logger.error(f"视频剪辑失败: {e}")
+            error_msg = f"视频剪辑失败: {e}"
+            if temp_dir and temp_dir.exists():
+                # 显示临时目录中的文件
+                try:
+                    files = list(temp_dir.glob("*"))
+                    error_msg += f"\n临时目录文件: {[f.name for f in files]}"
+                    # 显示文件大小
+                    for f in files:
+                        if f.is_file():
+                            error_msg += f"\n  - {f.name}: {f.stat().st_size} bytes"
+                except Exception as list_error:
+                    error_msg += f"\n无法列出文件: {list_error}"
+            self.logger.error(error_msg)
             return False
+        finally:
+            # 清理临时文件（无论成功或失败）
+            if temp_dir and temp_dir.exists():
+                try:
+                    time.sleep(0.3)  # 等待文件句柄释放
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+                except Exception as cleanup_error:
+                    self.logger.warning(f"清理临时文件失败: {cleanup_error}")
     
     def _concat_videos(self, video_files: List[Path], output_path: str, reencode: bool = False) -> bool:
         """
@@ -249,15 +477,33 @@ class VideoProcessor(LoggerMixin):
         Returns:
             是否成功
         """
-        # 创建文件列表
-        concat_file = Path(output_path).parent / "concat_list.txt"
-        
-        with open(concat_file, 'w', encoding='utf-8') as f:
-            for video_file in video_files:
-                # FFmpeg concat需要使用相对路径或绝对路径
-                f.write(f"file '{video_file.absolute()}'\n")
-        
+        concat_file = None
         try:
+            # 验证所有输入文件存在
+            for video_file in video_files:
+                if not video_file.exists():
+                    self.logger.error(f"视频文件不存在: {video_file}")
+                    return False
+                if video_file.stat().st_size == 0:
+                    self.logger.error(f"视频文件为空: {video_file}")
+                    return False
+            
+            # 创建文件列表
+            concat_file = Path(output_path).parent / "concat_list.txt"
+            
+            with open(concat_file, 'w', encoding='utf-8') as f:
+                for video_file in video_files:
+                    # FFmpeg concat需要使用绝对路径，并且路径中的反斜杠需要转义
+                    abs_path = str(video_file.absolute()).replace('\\', '/')
+                    # 对路径中的单引号进行转义，避免FFmpeg解析错误
+                    escaped_path = abs_path.replace("'", "'\\''")
+                    f.write(f"file '{escaped_path}'\n")
+            
+            # 验证concat文件创建成功
+            if not concat_file.exists():
+                self.logger.error("concat列表文件创建失败")
+                return False
+            
             if reencode:
                 # 重新编码模式 - 更安全，确保兼容性
                 cmd = [
@@ -286,15 +532,24 @@ class VideoProcessor(LoggerMixin):
                     output_path
                 ]
             
-            subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
-            concat_file.unlink()  # 删除临时文件列表
+            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore')
+            
+            if result.returncode != 0:
+                self.logger.error(f"视频合并失败: {result.stderr}")
+                return False
+            
             return True
             
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"视频合并失败: {e.stderr}")
-            if concat_file.exists():
-                concat_file.unlink()
+        except Exception as e:
+            self.logger.error(f"视频合并异常: {e}")
             return False
+        finally:
+            # 清理concat列表文件
+            if concat_file and concat_file.exists():
+                try:
+                    concat_file.unlink()
+                except Exception as e:
+                    self.logger.warning(f"删除concat列表文件失败: {e}")
     
     def add_subtitles(self, video_path: str, subtitle_path: str, 
                      output_path: str) -> bool:

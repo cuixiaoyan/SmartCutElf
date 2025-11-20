@@ -40,6 +40,19 @@ class AudioAnalyzer(LoggerMixin):
                 audio_data = audio_data.astype(np.float32) / 32768.0
             elif audio_data.dtype == np.int32:
                 audio_data = audio_data.astype(np.float32) / 2147483648.0
+            elif audio_data.dtype == np.float32:
+                # 已经是float32，检查是否需要归一化
+                if np.max(np.abs(audio_data)) > 1.0:
+                    audio_data = audio_data / np.max(np.abs(audio_data))
+            elif audio_data.dtype == np.float64:
+                audio_data = audio_data.astype(np.float32)
+                if np.max(np.abs(audio_data)) > 1.0:
+                    audio_data = audio_data / np.max(np.abs(audio_data))
+            else:
+                # 其他类型，尝试转换为float32并归一化
+                audio_data = audio_data.astype(np.float32)
+                if np.max(np.abs(audio_data)) > 1.0:
+                    audio_data = audio_data / np.max(np.abs(audio_data))
             
             self.logger.debug(f"音频加载成功: {audio_path}, 采样率: {sample_rate}Hz")
             return sample_rate, audio_data
@@ -200,6 +213,7 @@ class AudioAnalyzer(LoggerMixin):
             segment = audio_data[start_sample:end_sample]
             
             if len(segment) == 0:
+                self.logger.debug(f"音频片段为空: {start_time}-{end_time}")
                 return 0.0
             
             # 计算能量数据
@@ -222,21 +236,35 @@ class AudioAnalyzer(LoggerMixin):
             energy_variance = np.var(energies)
             max_energy = np.max(energies)
             
-            # 计算音量变化次数
-            changes = 0
-            for i in range(1, len(energies)):
-                if abs(energies[i] - energies[i-1]) > 0.1:
-                    changes += 1
-            change_score = min(changes / 10.0, 1.0)
+            # 对能量值进行合理归一化
+            # 使用对数变换处理低能量值
+            normalized_avg = min(avg_energy * 10, 1.0)  # 放大但限制在[0,1]
+            normalized_variance = min(energy_variance * 50, 1.0)  # 方差放大系数
             
-            # 综合评分
+            # 计算音量变化次数（更灵敏的阈值）
+            changes = 0
+            threshold = max(0.01, avg_energy * 0.2)  # 动态阈值
+            for i in range(1, len(energies)):
+                if abs(energies[i] - energies[i-1]) > threshold:
+                    changes += 1
+            change_score = min(changes / max(len(energies), 1) * 2, 1.0)
+            
+            # 综合评分（调整权重）
             score = (
-                avg_energy * 0.3 +
-                energy_variance * 2.0 * 0.3 +
-                change_score * 0.4
+                normalized_avg * 0.4 +        # 平均能量
+                normalized_variance * 0.3 +   # 能量变化
+                change_score * 0.3            # 变化频率
             )
             
-            return min(score, 1.0)
+            final_score = min(score, 1.0)
+            
+            self.logger.debug(
+                f"音频分数 {start_time:.1f}-{end_time:.1f}s: "
+                f"avg={normalized_avg:.3f}, var={normalized_variance:.3f}, "
+                f"change={change_score:.3f}, final={final_score:.3f}"
+            )
+            
+            return final_score
             
         except Exception as e:
             self.logger.error(f"计算音频分数失败: {e}")

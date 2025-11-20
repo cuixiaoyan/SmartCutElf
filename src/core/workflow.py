@@ -113,6 +113,26 @@ class VideoProcessingWorkflow(LoggerMixin):
                 result['input_path'] = video_path
                 return result
             
+            # 验证高光检测结果的有效性
+            time_ranges = highlight_result.get('time_ranges', [])
+            if not time_ranges:
+                return {
+                    'success': False,
+                    'error': '高光检测未返回有效的时间段',
+                    'input_path': video_path
+                }
+            
+            # 验证时间段的合理性
+            for i, (start, end) in enumerate(time_ranges):
+                if start >= end or start < 0:
+                    return {
+                        'success': False,
+                        'error': f'无效的时间段 {i+1}: {start}-{end}秒',
+                        'input_path': video_path
+                    }
+            
+            self.logger.info(f"高光检测成功，共 {len(time_ranges)} 个片段，总时长: {highlight_result['total_duration']:.2f}秒")
+            
             # 4. 剪辑视频
             output_dir = self.config.get('output.folder', 'output')
             
@@ -143,6 +163,14 @@ class VideoProcessingWorkflow(LoggerMixin):
                 video_path, output_dir, suffix='_edited'
             )
             
+            # 验证临时文件是否存在
+            if not Path(temp_cut_path).exists():
+                return {
+                    'success': False,
+                    'error': f'临时剪辑文件不存在: {temp_cut_path}',
+                    'input_path': video_path
+                }
+            
             resize_success = True
             if orientation == 'landscape':
                 resize_success = self.video_processor.resize_video(
@@ -155,11 +183,22 @@ class VideoProcessingWorkflow(LoggerMixin):
             else:
                 # 保持原样，直接重命名
                 import shutil
-                shutil.move(temp_cut_path, final_output_path)
+                try:
+                    shutil.move(temp_cut_path, final_output_path)
+                except Exception as e:
+                    self.logger.error(f"移动文件失败: {e}")
+                    return {
+                        'success': False,
+                        'error': f'移动文件失败: {str(e)}',
+                        'input_path': video_path
+                    }
             
             # 清理临时剪辑文件
             if orientation != 'original' and Path(temp_cut_path).exists():
-                Path(temp_cut_path).unlink()
+                try:
+                    Path(temp_cut_path).unlink()
+                except Exception as e:
+                    self.logger.warning(f"清理临时文件失败: {e}")
                 
             if not resize_success:
                 return {

@@ -28,37 +28,27 @@ python main.py
 - 🔔 **桌面通知** - 处理完成自动提醒
 - 📊 **友好提示** - 详细错误说明和解决方案
 
-## � 文档
+## 📚 文档
 
 | 文档 | 说明 |
 |------|------|
-| [启动指南](docs/启动指南.md) | 安装和配置 |
-| [使用说明](docs/使用说明.md) | 操作指南 |
+| [项目结构说明](docs/项目结构说明.md) | 目录结构和文件说明 |
+| [依赖优化说明](docs/依赖优化说明.md) | 依赖管理和优化 |
+| [打包优化说明](docs/打包优化说明.md) | 快速打包指南 |
+| [问题修复记录](docs/问题修复记录.md) | 常见问题解决 |
 | [FFmpeg安装](docs/FFmpeg安装指南.md) | FFmpeg 配置 |
-| [部署指南](docs/部署指南.md) | 打包和分发 |
-| [项目文档](docs/README_PROJECT.md) | 项目详情 |
-| [技术设计](docs/Technical_Design.md) | 架构设计 |
 
 ## 🔨 打包部署
 
 ```bash
-# Windows
-quick_build.bat
+# 打包（约40秒）
+python scripts\build.py
 
-# Linux/Mac
-chmod +x quick_build.sh && ./quick_build.sh
+# 或使用批处理（推荐）
+快速打包.bat
 ```
 
-**输出：**
-- `dist/SmartCutElf.exe` - 可执行文件
-- `SmartCutElf_v1.0.0_Portable.zip` - 便携版
-- `installer_script.iss` - 安装脚本
-
-## 🧪 测试
-
-```bash
-python run_tests.py
-```
+**输出：** `dist/SmartCutElf/` 目录
 
 ## 📝 更新日志
 

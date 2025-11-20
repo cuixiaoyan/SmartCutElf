@@ -184,51 +184,94 @@ class VideoAnalyzer(LoggerMixin):
         try:
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
+                self.logger.debug(f"无法打开视频: {video_path}")
                 return 0.0
             
             fps = cap.get(cv2.CAP_PROP_FPS)
+            if fps <= 0:
+                self.logger.warning(f"视频FPS无效: {fps}, 使用默认值25")
+                fps = 25.0
+            
             start_frame = int(start_time * fps)
             end_frame = int(end_time * fps)
+            
+            # 检查帧数范围的有效性
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total_frames > 0:
+                end_frame = min(end_frame, total_frames - 1)
+            
+            if start_frame >= end_frame:
+                self.logger.debug(f"无效的帧范围: {start_frame}-{end_frame}")
+                cap.release()
+                return 0.0
             
             cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
             
             motion_scores = []
             prev_gray = None
             current_frame = start_frame
+            sample_interval = max(1, int(fps / 10))  # 每秒0.1秒采样一次
             
             while current_frame < end_frame:
                 ret, frame = cap.read()
                 if not ret:
                     break
                 
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                # 按间隔采样，提高性能
+                if (current_frame - start_frame) % sample_interval == 0:
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    
+                    if prev_gray is not None:
+                        diff = cv2.absdiff(prev_gray, gray)
+                        motion_score = np.mean(diff) / 255.0
+                        motion_scores.append(motion_score)
+                    
+                    prev_gray = gray
                 
-                if prev_gray is not None:
-                    diff = cv2.absdiff(prev_gray, gray)
-                    motion_score = np.mean(diff) / 255.0
-                    motion_scores.append(motion_score)
-                
-                prev_gray = gray
                 current_frame += 1
             
             cap.release()
             
             if not motion_scores:
+                self.logger.debug(f"视频片段无运动数据: {start_time}-{end_time}")
                 return 0.0
             
             # 计算特征
+            motion_scores = np.array(motion_scores)
             avg_motion = np.mean(motion_scores)
             motion_variance = np.var(motion_scores)
             max_motion = np.max(motion_scores)
             
-            # 综合评分
+            # 对运动值进行合理归一化
+            normalized_avg = min(avg_motion * 5, 1.0)  # 放大但限制在[0,1]
+            normalized_variance = min(motion_variance * 20, 1.0)  # 方差放大系数
+            normalized_max = min(max_motion * 3, 1.0)  # 最大值放大
+            
+            # 计算运动变化频率
+            changes = 0
+            threshold = max(0.01, avg_motion * 0.3)
+            for i in range(1, len(motion_scores)):
+                if abs(motion_scores[i] - motion_scores[i-1]) > threshold:
+                    changes += 1
+            change_score = min(changes / max(len(motion_scores), 1) * 2, 1.0)
+            
+            # 综合评分（调整权重）
             score = (
-                avg_motion * 0.4 +
-                motion_variance * 10.0 * 0.3 +  # 方差越大越有趣
-                max_motion * 0.3
+                normalized_avg * 0.3 +      # 平均运动
+                normalized_variance * 0.3 + # 运动变化
+                normalized_max * 0.2 +      # 最大运动
+                change_score * 0.2          # 变化频率
             )
             
-            return min(score, 1.0)
+            final_score = min(score, 1.0)
+            
+            self.logger.debug(
+                f"视频分数 {start_time:.1f}-{end_time:.1f}s: "
+                f"avg={normalized_avg:.3f}, var={normalized_variance:.3f}, "
+                f"max={normalized_max:.3f}, change={change_score:.3f}, final={final_score:.3f}"
+            )
+            
+            return final_score
             
         except Exception as e:
             self.logger.error(f"计算视频分数失败: {e}")

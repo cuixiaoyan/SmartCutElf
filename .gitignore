@@ -46,6 +46,7 @@ logs/
 cache/
 temp/
 output/
+data/
 *.db
 *.sqlite
 *.sqlite3

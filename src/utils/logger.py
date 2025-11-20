@@ -34,7 +34,7 @@ def setup_logger(
     """
     # 创建日志目录
     log_path = Path(log_dir)
-    log_path.mkdir(exist_ok=True)
+    log_path.mkdir(parents=True, exist_ok=True)
     
     # 创建日志记录器
     logger = logging.getLogger(name)

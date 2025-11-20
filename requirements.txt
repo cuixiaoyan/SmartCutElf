@@ -1,37 +1,62 @@
 # SmartCutElf 依赖包列表
+# 安装命令: pip install -r requirements.txt
 
-# GUI框架
-PyQt5==5.15.10
-PyQt5-Qt5==5.15.2
-PyQt5-sip==12.13.0
+# ============================================
+# 核心依赖（必须）
+# ============================================
 
-# 视频处理
-opencv-python==4.8.1.78
-imageio==2.31.5
-imageio-ffmpeg==0.4.9
+# 数组和数值计算
+numpy>=1.21.0
 
-# 音频处理 - 使用scipy替代pydub以兼容Python 3.13
+# 视频处理和计算机视觉
+opencv-python>=4.5.0
 
-# AI和机器学习
-openai-whisper
-torch
-torchaudio
-numpy
+# 科学计算（音频信号处理）
+scipy>=1.7.0
 
-# 语音合成
-pyttsx3==2.90
+# GUI界面
+PyQt5>=5.15.0
 
-# 数据处理
-pillow==10.1.0
-scipy==1.11.4
+# 配置文件解析
+pyyaml>=5.4.0
 
-# 数据库
-# SQLite3 已包含在Python标准库中
+# 系统性能监控
+psutil>=5.8.0
 
-# 系统工具
-psutil>=5.9.0
-requests==2.31.0
+# ============================================
+# AI功能
+# ============================================
 
-# 日志和配置
-python-dotenv==1.0.0
-pyyaml==6.0.1
+# 语音识别（Whisper）- 用于字幕生成（必需）
+openai-whisper>=20230314
+
+# 文本转语音（未使用，已注释）
+# pyttsx3>=2.90  # text_to_speech.py存在但从未被调用，可以删除
+
+# ============================================
+# 开发和打包工具
+# ============================================
+
+# 打包工具
+pyinstaller>=5.0.0
+
+# ============================================
+# 说明
+# ============================================
+# 
+# 1. FFmpeg是外部依赖，需要单独安装：
+#    - Windows: 下载FFmpeg并添加到PATH
+#    - 或放置在: D:\ffmpeg-master-latest-win64-gpl-shared\bin
+#
+# 2. Whisper模型会在首次使用时自动下载
+#    - tiny: ~75MB
+#    - base: ~150MB
+#    - small: ~500MB
+#    - medium: ~1.5GB
+#    - large: ~3GB
+#
+# 3. 推荐使用虚拟环境：
+#    python -m venv venv
+#    venv\Scripts\activate  (Windows)
+#    pip install -r requirements.txt
+#
