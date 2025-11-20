@@ -115,13 +115,18 @@ class VideoProcessingWorkflow(LoggerMixin):
             
             # 4. 剪辑视频
             output_dir = self.config.get('output.folder', 'output')
-            output_path = self.file_manager.create_output_path(
-                video_path, output_dir, suffix='_edited'
+            
+            # 确保输出目录存在
+            Path(output_dir).mkdir(parents=True, exist_ok=True)
+            
+            # 生成临时剪辑文件路径
+            temp_cut_path = self.file_manager.create_output_path(
+                video_path, output_dir, suffix='_temp_cut'
             )
             
             success = self.video_processor.cut_video(
                 video_path,
-                output_path,
+                temp_cut_path,
                 highlight_result['time_ranges']
             )
             
@@ -132,18 +137,49 @@ class VideoProcessingWorkflow(LoggerMixin):
                     'input_path': video_path
                 }
             
-            # 5. 生成字幕（如果启用）
+            # 5. 处理画面比例（如果需要）
+            orientation = self.config.get('processing.orientation', 'original')
+            final_output_path = self.file_manager.create_output_path(
+                video_path, output_dir, suffix='_edited'
+            )
+            
+            resize_success = True
+            if orientation == 'landscape':
+                resize_success = self.video_processor.resize_video(
+                    temp_cut_path, final_output_path, 1920, 1080
+                )
+            elif orientation == 'portrait':
+                resize_success = self.video_processor.resize_video(
+                    temp_cut_path, final_output_path, 1080, 1920
+                )
+            else:
+                # 保持原样，直接重命名
+                import shutil
+                shutil.move(temp_cut_path, final_output_path)
+            
+            # 清理临时剪辑文件
+            if orientation != 'original' and Path(temp_cut_path).exists():
+                Path(temp_cut_path).unlink()
+                
+            if not resize_success:
+                return {
+                    'success': False,
+                    'error': '视频画面调整失败',
+                    'input_path': video_path
+                }
+            
+            # 6. 生成字幕（如果启用）
             subtitle_path = None
             if self.config.get('subtitle.enabled', True):
-                subtitle_path = self._generate_subtitles(video_path, output_path)
+                subtitle_path = self._generate_subtitles(video_path, final_output_path)
             
-            # 6. 记录结果
+            # 7. 记录结果
             processing_time = time.time() - start_time
             
             result = {
                 'success': True,
                 'input_path': video_path,
-                'output_path': output_path,
+                'output_path': final_output_path,
                 'subtitle_path': subtitle_path,
                 'processing_time': processing_time,
                 'highlights': highlight_result['highlights'],
@@ -151,7 +187,7 @@ class VideoProcessingWorkflow(LoggerMixin):
                 'segment_count': highlight_result['segment_count']
             }
             
-            self.logger.info(f"视频处理完成: {output_path}")
+            self.logger.info(f"视频处理完成: {final_output_path}")
             self.logger.info(f"处理时间: {processing_time:.2f}秒")
             
             return result

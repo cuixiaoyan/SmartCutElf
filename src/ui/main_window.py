@@ -7,7 +7,8 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QPushButton, QLabel, QFileDialog, QListWidget,
                              QProgressBar, QTextEdit, QSplitter, QMenuBar,
                              QMenu, QAction, QStatusBar, QMessageBox, QListWidgetItem,
-                             QGroupBox, QCheckBox)
+                             QGroupBox, QCheckBox, QDialog, QApplication, QRadioButton,
+                             QButtonGroup)
 from PyQt5.QtCore import Qt, pyqtSignal, QThread
 from PyQt5.QtGui import QIcon, QFont
 from pathlib import Path
@@ -15,6 +16,7 @@ from utils.config import get_config
 from utils.logger import setup_logger
 from utils.file_manager import FileManager
 from core.workflow import VideoProcessingWorkflow
+from ui.theme_manager import get_theme_manager
 
 
 class ProcessingThread(QThread):
@@ -50,19 +52,24 @@ class MainWindow(QMainWindow):
         self.logger = setup_logger()
         self.file_manager = FileManager()
         self.workflow = VideoProcessingWorkflow()
+        self.theme_manager = get_theme_manager()
         
         self.video_files = []
         self.current_project_id = None
         self.processing_thread = None
+        
+        # 连接主题变更信号
+        self.theme_manager.theme_changed.connect(self._on_theme_changed)
         
         self._init_ui()
         self._apply_theme()
     
     def _init_ui(self):
         """初始化用户界面"""
-        # 设置窗口属性 - 更大的默认尺寸
+        # 设置窗口属性 - 更大的默认尺寸和最小尺寸（增大30%）
         self.setWindowTitle("SmartCutElf - 智剪精灵 v1.0")
-        self.setGeometry(50, 50, 1400, 900)
+        self.setGeometry(50, 50, 1820, 1170)  # 1400*1.3=1820, 900*1.3=1170
+        self.setMinimumSize(1560, 975)  # 1200*1.3=1560, 750*1.3=975
         
         # 创建菜单栏
         self._create_menu_bar()
@@ -73,6 +80,8 @@ class MainWindow(QMainWindow):
         
         # 主布局
         main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(20, 16, 20, 16)
+        main_layout.setSpacing(16)
         
         # 顶部工具栏
         toolbar_layout = self._create_toolbar()
@@ -89,8 +98,9 @@ class MainWindow(QMainWindow):
         right_panel = self._create_right_panel()
         splitter.addWidget(right_panel)
         
-        # 设置分割器比例
-        splitter.setSizes([350, 850])
+        # 设置分割器比例 - 左侧占30%
+        # 窗口总宽 1820，左侧 1820 * 0.3 = 546
+        splitter.setSizes([546, 1274])
         main_layout.addWidget(splitter)
         
         # 底部状态栏
@@ -135,26 +145,26 @@ class MainWindow(QMainWindow):
         toolbar = QHBoxLayout()
         
         # 打开文件夹按钮
-        self.btn_open = QPushButton('📁 打开文件夹')
+        self.btn_open = QPushButton('打开')
         self.btn_open.setMinimumHeight(45)
-        self.btn_open.setMinimumWidth(150)
+        self.btn_open.setMinimumWidth(100)
         self.btn_open.setFont(QFont('Microsoft YaHei', 10))
         self.btn_open.clicked.connect(self.open_folder)
         toolbar.addWidget(self.btn_open)
         
         # 开始处理按钮
-        self.btn_start = QPushButton('▶️ 开始处理')
+        self.btn_start = QPushButton('开始')
         self.btn_start.setMinimumHeight(45)
-        self.btn_start.setMinimumWidth(150)
+        self.btn_start.setMinimumWidth(100)
         self.btn_start.setFont(QFont('Microsoft YaHei', 10, QFont.Bold))
         self.btn_start.setEnabled(False)
         self.btn_start.clicked.connect(self.start_processing)
         toolbar.addWidget(self.btn_start)
         
         # 停止按钮
-        self.btn_stop = QPushButton('⏹️ 停止')
+        self.btn_stop = QPushButton('停止')
         self.btn_stop.setMinimumHeight(45)
-        self.btn_stop.setMinimumWidth(120)
+        self.btn_stop.setMinimumWidth(100)
         self.btn_stop.setFont(QFont('Microsoft YaHei', 10))
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_processing)
@@ -163,23 +173,74 @@ class MainWindow(QMainWindow):
         toolbar.addStretch()
         
         # 字幕开关
-        self.chk_subtitle = QCheckBox('生成字幕')
+        self.chk_subtitle = QCheckBox('字幕')
         self.chk_subtitle.setChecked(self.config.get('subtitle.enabled', True))
         self.chk_subtitle.setFont(QFont('Microsoft YaHei', 10))
         toolbar.addWidget(self.chk_subtitle)
         
+        toolbar.addSpacing(40)
+        
+        # 视频比例单选按钮组
+        ratio_label = QLabel('比例')
+        ratio_label.setFont(QFont('Microsoft YaHei', 10, QFont.Bold))
+        toolbar.addWidget(ratio_label)
+        
+        toolbar.addSpacing(15)
+        
+        # 创建单选按钮组
+        self.orientation_group = QButtonGroup(self)
+        
+        self.radio_original = QRadioButton('原始')
+        self.radio_original.setFont(QFont('Microsoft YaHei', 10))
+        self.radio_original.setChecked(True)
+        self.orientation_group.addButton(self.radio_original, 0)
+        toolbar.addWidget(self.radio_original)
+        
         toolbar.addSpacing(20)
         
+        self.radio_landscape = QRadioButton('横屏')
+        self.radio_landscape.setFont(QFont('Microsoft YaHei', 10))
+        self.orientation_group.addButton(self.radio_landscape, 1)
+        toolbar.addWidget(self.radio_landscape)
+        
+        toolbar.addSpacing(20)
+        
+        self.radio_portrait = QRadioButton('竖屏')
+        self.radio_portrait.setFont(QFont('Microsoft YaHei', 10))
+        self.orientation_group.addButton(self.radio_portrait, 2)
+        toolbar.addWidget(self.radio_portrait)
+        
+        # 根据配置设置默认选中项
+        orientation = self.config.get('processing.orientation', 'original')
+        if orientation == 'landscape':
+            self.radio_landscape.setChecked(True)
+        elif orientation == 'portrait':
+            self.radio_portrait.setChecked(True)
+        else:
+            self.radio_original.setChecked(True)
+            
+        toolbar.addSpacing(20)
+        
+        # 主题切换按钮
+        self.btn_theme = QPushButton('主题')
+        self.btn_theme.setMinimumHeight(45)
+        self.btn_theme.setMinimumWidth(80)
+        self.btn_theme.setFont(QFont('Microsoft YaHei', 10))
+        self.btn_theme.clicked.connect(self.toggle_theme)
+        toolbar.addWidget(self.btn_theme)
+        
+        toolbar.addSpacing(10)
+        
         # 设置按钮
-        self.btn_settings = QPushButton('⚙️ 设置')
+        self.btn_settings = QPushButton('设置')
         self.btn_settings.setMinimumHeight(45)
-        self.btn_settings.setMinimumWidth(120)
+        self.btn_settings.setMinimumWidth(80)
         self.btn_settings.setFont(QFont('Microsoft YaHei', 10))
         self.btn_settings.clicked.connect(self.open_settings)
         toolbar.addWidget(self.btn_settings)
         
         return toolbar
-    
+
     def _create_left_panel(self) -> QWidget:
         """创建左侧文件列表面板"""
         panel = QWidget()
@@ -273,76 +334,35 @@ class MainWindow(QMainWindow):
     
     def _apply_theme(self):
         """应用主题样式"""
+        # 从配置读取主题设置
         theme = self.config.get('ui.theme', 'dark')
+        self.theme_manager.set_theme(theme)
+        self.theme_manager.apply_theme(QApplication.instance())
         
-        if theme == 'dark':
-            stylesheet = """
-                QMainWindow {
-                    background-color: #1e1e1e;
-                    color: #ffffff;
-                }
-                QWidget {
-                    background-color: #1e1e1e;
-                    color: #ffffff;
-                }
-                QPushButton {
-                    background-color: #0078d4;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    font-size: 14px;
-                }
-                QPushButton:hover {
-                    background-color: #1984d8;
-                }
-                QPushButton:pressed {
-                    background-color: #006cbe;
-                }
-                QPushButton:disabled {
-                    background-color: #3f3f3f;
-                    color: #808080;
-                }
-                QListWidget {
-                    background-color: #252526;
-                    border: 1px solid #3f3f3f;
-                    border-radius: 4px;
-                }
-                QTextEdit {
-                    background-color: #252526;
-                    border: 1px solid #3f3f3f;
-                    border-radius: 4px;
-                    font-family: 'Consolas', monospace;
-                }
-                QProgressBar {
-                    border: 1px solid #3f3f3f;
-                    border-radius: 4px;
-                    text-align: center;
-                }
-                QProgressBar::chunk {
-                    background-color: #0078d4;
-                }
-                QMenuBar {
-                    background-color: #2d2d30;
-                    color: #ffffff;
-                }
-                QMenuBar::item:selected {
-                    background-color: #3f3f46;
-                }
-                QMenu {
-                    background-color: #2d2d30;
-                    color: #ffffff;
-                    border: 1px solid #3f3f3f;
-                }
-                QMenu::item:selected {
-                    background-color: #0078d4;
-                }
-                QStatusBar {
-                    background-color: #007acc;
-                    color: white;
-                }
-            """
-            self.setStyleSheet(stylesheet)
+        # 更新主题按钮文本
+        self._update_theme_button_text()
+    
+    def _on_theme_changed(self, theme_name: str):
+        """主题变更回调"""
+        self.theme_manager.apply_theme(QApplication.instance())
+        self._update_theme_button_text()
+        self.logger.info(f"主题已切换到: {theme_name}")
+    
+    def _update_theme_button_text(self):
+        """更新主题按钮文本"""
+        if hasattr(self, 'btn_theme'):
+            if self.theme_manager.current_theme == 'dark':
+                self.btn_theme.setText('☀️ 浅色模式')
+            else:
+                self.btn_theme.setText('🌙 深色模式')
+    
+    def toggle_theme(self):
+        """切换主题"""
+        self.theme_manager.toggle_theme()
+        # 保存到配置
+        self.config.set('ui.theme', self.theme_manager.current_theme)
+        self.config.save()
+        self.add_status_message(f"✨ 已切换到{'深色' if self.theme_manager.current_theme == 'dark' else '浅色'}主题")
     
     def open_folder(self):
         """打开文件夹选择对话框"""
@@ -400,6 +420,16 @@ class MainWindow(QMainWindow):
         
         # 更新配置中的字幕设置
         self.config.set('subtitle.enabled', self.chk_subtitle.isChecked())
+        
+        # 更新配置中的视频比例设置
+        if self.radio_landscape.isChecked():
+            orientation = 'landscape'
+        elif self.radio_portrait.isChecked():
+            orientation = 'portrait'
+        else:
+            orientation = 'original'
+        self.config.set('processing.orientation', orientation)
+        
         self.config.save()
         
         self.logger.info("开始处理视频")
@@ -535,8 +565,12 @@ class MainWindow(QMainWindow):
     
     def open_settings(self):
         """打开设置对话框"""
-        # TODO: 实现设置对话框
-        QMessageBox.information(self, '提示', '设置功能正在开发中...')
+        from ui.settings_dialog import SettingsDialog
+        dialog = SettingsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.add_status_message("⚙️ 设置已更新")
+            # 刷新配置显示
+            self.chk_subtitle.setChecked(self.config.get('subtitle.enabled', True))
     
     def show_about(self):
         """显示关于对话框"""

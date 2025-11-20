@@ -4,13 +4,15 @@ app:
   version: 1.0.0
 highlight:
   audio_weight: 0.4
+  memory_limit_mb: 2048
   sensitivity: medium
   time_weight: 0.2
   video_weight: 0.4
 output:
   audio_codec: aac
+  auto_open: true
   bitrate: 5000k
-  folder: output
+  folder: D:/上传资料测试/shipin/new
   format: mp4
   fps: 30
   resolution: 1080p
@@ -22,6 +24,7 @@ performance:
 processing:
   auto_delete_temp: true
   max_workers: 4
+  orientation: original
   segment_duration: 10
   target_duration_max: 300
   target_duration_min: 180
@@ -32,7 +35,7 @@ speech:
   tts_enabled: false
   tts_voice: female
 subtitle:
-  enabled: false
+  enabled: true
   font_color: white
   font_name: Microsoft YaHei
   font_size: medium
@@ -40,6 +43,6 @@ subtitle:
   outline_color: black
   position: bottom
 ui:
-  theme: dark
+  theme: light
   window_height: 900
   window_width: 1400

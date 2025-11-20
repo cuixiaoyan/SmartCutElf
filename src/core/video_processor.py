@@ -299,35 +299,44 @@ class VideoProcessor(LoggerMixin):
         except subprocess.CalledProcessError as e:
             self.logger.error(f"字幕添加失败: {e.stderr}")
             return False
-    
-    def resize_video(self, video_path: str, output_path: str, 
-                    width: int, height: int) -> bool:
+
+    def resize_video(self, input_path: str, output_path: str, 
+                    target_width: int = 1920, target_height: int = 1080) -> bool:
         """
-        调整视频分辨率
+        调整视频大小和比例（支持裁剪填充）
         
         Args:
-            video_path: 输入视频路径
+            input_path: 输入视频路径
             output_path: 输出视频路径
-            width: 目标宽度
-            height: 目标高度
+            target_width: 目标宽度
+            target_height: 目标高度
             
         Returns:
             是否成功
         """
         try:
+            # 使用scale和pad过滤器保持比例并填充背景
+            filter_complex = (
+                f"scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,"
+                f"pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:black"
+            )
+            
             cmd = [
                 self.ffmpeg_path,
-                '-i', video_path,
-                '-vf', f'scale={width}:{height}',
+                '-i', input_path,
+                '-vf', filter_complex,
+                '-c:v', 'libx264',
+                '-crf', '23',
+                '-preset', 'medium',
                 '-c:a', 'copy',
                 '-y',
                 output_path
             ]
             
-            subprocess.run(cmd, capture_output=True, check=True)
-            self.logger.info(f"视频调整成功: {output_path}")
+            subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
+            self.logger.info(f"视频尺寸调整成功: {output_path}")
             return True
             
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"视频调整失败: {e.stderr}")
+        except Exception as e:
+            self.logger.error(f"视频尺寸调整失败: {e}")
             return False
