@@ -55,12 +55,6 @@ output/
 Thumbs.db
 desktop.ini
 
-# Test
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
 # Build
 *.spec
 build/

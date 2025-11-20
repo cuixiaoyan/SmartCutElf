@@ -120,11 +120,12 @@ class ThemeManager(QObject):
                 background-color: {colors['primary']};
                 color: white;
                 border: none;
-                border-radius: 8px;
-                padding: 8px 20px;
-                font-weight: 600;
+                border-radius: 6px;
+                padding: 6px 16px;
+                font-weight: 500;
                 font-size: 13px;
-                min-height: 36px;
+                min-height: 28px;
+                max-height: 32px;
             }}
             
             QPushButton:hover {{
@@ -133,7 +134,7 @@ class ThemeManager(QObject):
             
             QPushButton:pressed {{
                 background-color: {colors['primary_pressed']};
-                padding: 9px 20px 7px 20px;
+                padding: 7px 16px 5px 16px;
             }}
             
             QPushButton:disabled {{
@@ -189,12 +190,12 @@ class ThemeManager(QObject):
             QListWidget::item {{
                 background-color: {colors['bg_elevated']};
                 border: 1px solid {colors['border']};
-                border-radius: 8px;
-                padding: 12px;
-                margin: 4px 6px;
+                border-radius: 6px;
+                padding: 8px 12px;
+                margin: 3px 4px;
                 color: {colors['text_primary']};
                 font-size: 13px;
-                line-height: 1.5;
+                line-height: 1.4;
             }}
             
             QListWidget::item:hover {{
@@ -228,17 +229,17 @@ class ThemeManager(QObject):
             QProgressBar {{
                 background-color: {colors['bg_secondary']};
                 border: none;
-                border-radius: 6px;
-                min-height: 24px;
-                max-height: 24px;
+                border-radius: 4px;
+                min-height: 20px;
+                max-height: 20px;
                 text-align: center;
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 600;
             }}
             
             QProgressBar::chunk {{
                 background-color: {colors['primary']};
-                border-radius: 6px;
+                border-radius: 4px;
             }}
             
             /* ========== 分组框 ========== */

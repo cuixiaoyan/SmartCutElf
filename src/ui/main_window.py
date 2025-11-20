@@ -95,8 +95,8 @@ class MainWindow(QMainWindow):
         
         # 主布局
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(16, 12, 16, 12)
-        main_layout.setSpacing(12)
+        main_layout.setContentsMargins(12, 10, 12, 10)
+        main_layout.setSpacing(10)
         
         # 顶部工具栏
         toolbar_layout = self._create_toolbar()
@@ -126,17 +126,17 @@ class MainWindow(QMainWindow):
     def _create_toolbar(self) -> QHBoxLayout:
         """创建工具栏"""
         toolbar = QHBoxLayout()
-        toolbar.setSpacing(10)
+        toolbar.setSpacing(8)
         
         # 打开文件夹按钮
         self.btn_open = QPushButton('📂 打开文件夹')
-        self.btn_open.setMinimumWidth(100)
+        self.btn_open.setFixedWidth(125)
         self.btn_open.clicked.connect(self.open_folder)
         toolbar.addWidget(self.btn_open)
         
         # 开始处理按钮
         self.btn_start = QPushButton('▶️ 开始处理')
-        self.btn_start.setMinimumWidth(100)
+        self.btn_start.setFixedWidth(115)
         self.btn_start.setProperty("primary", True)
         self.btn_start.setEnabled(False)
         self.btn_start.clicked.connect(self.start_processing)
@@ -144,7 +144,7 @@ class MainWindow(QMainWindow):
         
         # 停止按钮
         self.btn_stop = QPushButton('⏹️ 停止')
-        self.btn_stop.setMinimumWidth(80)
+        self.btn_stop.setFixedWidth(80)
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_processing)
         toolbar.addWidget(self.btn_stop)
@@ -160,14 +160,16 @@ class MainWindow(QMainWindow):
         toolbar.addSpacing(16)
         
         # 主题切换按钮
-        self.btn_theme = QPushButton('主题')
-        self.btn_theme.setMinimumWidth(90)
+        self.btn_theme = QPushButton('深色模式')
+        self.btn_theme.setFixedWidth(85)
+        self.btn_theme.setProperty("secondary", True)
         self.btn_theme.clicked.connect(self.toggle_theme)
         toolbar.addWidget(self.btn_theme)
         
         # 设置按钮
         self.btn_settings = QPushButton('⚙️ 设置')
-        self.btn_settings.setMinimumWidth(80)
+        self.btn_settings.setFixedWidth(80)
+        self.btn_settings.setProperty("secondary", True)
         self.btn_settings.clicked.connect(self.open_settings)
         toolbar.addWidget(self.btn_settings)
         
@@ -278,9 +280,9 @@ class MainWindow(QMainWindow):
         """更新主题按钮文本"""
         if hasattr(self, 'btn_theme'):
             if self.theme_manager.current_theme == 'dark':
-                self.btn_theme.setText('☀️ 浅色模式')
+                self.btn_theme.setText('浅色模式')
             else:
-                self.btn_theme.setText('🌙 深色模式')
+                self.btn_theme.setText('深色模式')
     
     def toggle_theme(self):
         """切换主题"""

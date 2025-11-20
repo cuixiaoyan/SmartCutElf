@@ -195,12 +195,20 @@ class VideoProcessor(LoggerMixin):
             for i, (start, end) in enumerate(segments):
                 segment_file = temp_dir / f"segment_{i:04d}.mp4"
                 
+                # 使用重新编码而不是复制编码，避免关键帧问题导致的白屏
+                # -ss 放在 -i 之前可以更快，但可能不精确
+                # -ss 放在 -i 之后更精确，但稍慢
                 cmd = [
                     self.ffmpeg_path,
+                    '-ss', str(start),  # 先定位到开始位置
                     '-i', video_path,
-                    '-ss', str(start),
-                    '-to', str(end),
-                    '-c', 'copy',  # 复制编码，快速剪辑
+                    '-t', str(end - start),  # 使用持续时间而不是结束时间
+                    '-c:v', 'libx264',  # 重新编码视频
+                    '-preset', 'fast',  # 快速编码
+                    '-crf', '23',  # 质量控制（18-28，越小质量越好）
+                    '-c:a', 'aac',  # 音频编码
+                    '-b:a', '192k',  # 音频比特率
+                    '-movflags', '+faststart',  # 优化网络播放
                     '-y',
                     str(segment_file)
                 ]
@@ -229,13 +237,14 @@ class VideoProcessor(LoggerMixin):
             self.logger.error(f"视频剪辑失败: {e}")
             return False
     
-    def _concat_videos(self, video_files: List[Path], output_path: str) -> bool:
+    def _concat_videos(self, video_files: List[Path], output_path: str, reencode: bool = False) -> bool:
         """
         合并多个视频文件
         
         Args:
             video_files: 视频文件路径列表
             output_path: 输出文件路径
+            reencode: 是否重新编码（True更安全但更慢，False更快但可能有兼容性问题）
             
         Returns:
             是否成功
@@ -249,15 +258,33 @@ class VideoProcessor(LoggerMixin):
                 f.write(f"file '{video_file.absolute()}'\n")
         
         try:
-            cmd = [
-                self.ffmpeg_path,
-                '-f', 'concat',
-                '-safe', '0',
-                '-i', str(concat_file),
-                '-c', 'copy',
-                '-y',
-                output_path
-            ]
+            if reencode:
+                # 重新编码模式 - 更安全，确保兼容性
+                cmd = [
+                    self.ffmpeg_path,
+                    '-f', 'concat',
+                    '-safe', '0',
+                    '-i', str(concat_file),
+                    '-c:v', 'libx264',
+                    '-preset', 'fast',
+                    '-crf', '23',
+                    '-c:a', 'aac',
+                    '-b:a', '192k',
+                    '-movflags', '+faststart',
+                    '-y',
+                    output_path
+                ]
+            else:
+                # 复制模式 - 更快
+                cmd = [
+                    self.ffmpeg_path,
+                    '-f', 'concat',
+                    '-safe', '0',
+                    '-i', str(concat_file),
+                    '-c', 'copy',
+                    '-y',
+                    output_path
+                ]
             
             subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
             concat_file.unlink()  # 删除临时文件列表

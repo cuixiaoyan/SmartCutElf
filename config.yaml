@@ -28,9 +28,9 @@ processing:
   segment_duration: 10
   target_duration_max: 300
   target_duration_min: 180
+  transition_duration: 0.5
   transition_enabled: true
   transition_type: fade
-  transition_duration: 0.5
 speech:
   background_music: true
   music_volume: 30
