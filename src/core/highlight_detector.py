@@ -10,6 +10,7 @@ from core.audio_analyzer import AudioAnalyzer
 from core.video_analyzer import VideoAnalyzer
 from core.video_processor import VideoProcessor
 from utils.logger import LoggerMixin
+from utils.temp_file_manager import get_temp_manager
 
 
 class HighlightDetector(LoggerMixin):
@@ -57,48 +58,68 @@ class HighlightDetector(LoggerMixin):
         total_duration = video_info['duration']
         self.logger.info(f"视频总时长: {total_duration:.2f}秒")
         
-        # 提取音频
-        temp_audio_path = Path(video_path).parent / "temp_audio.wav"
+        # 使用临时文件管理器创建临时音频文件
+        temp_manager = get_temp_manager()
+        video_name = Path(video_path).stem
+        temp_audio_path = temp_manager.create_unique_temp_file(
+            prefix=f"{video_name}_",
+            suffix=".wav",
+            subdir="temp_audio"
+        )
+        
+        self.logger.debug(f"临时音频文件: {temp_audio_path}")
+        
         if not self.video_processor.extract_audio(video_path, str(temp_audio_path)):
             self.logger.error("音频提取失败")
             return []
         
-        # 分段分析
-        segments = []
-        num_segments = int(np.ceil(total_duration / segment_duration))
+        # 验证临时文件是否创建成功
+        if not temp_audio_path.exists():
+            self.logger.error(f"临时音频文件未创建: {temp_audio_path}")
+            return []
         
-        for i in range(num_segments):
-            start_time = i * segment_duration
-            end_time = min((i + 1) * segment_duration, total_duration)
+        try:
+            # 分段分析
+            segments = []
+            num_segments = int(np.ceil(total_duration / segment_duration))
             
-            # 计算综合分数
-            score = self.calculate_segment_score(
-                video_path, 
-                str(temp_audio_path),
-                start_time, 
-                end_time, 
-                total_duration
-            )
+            for i in range(num_segments):
+                start_time = i * segment_duration
+                end_time = min((i + 1) * segment_duration, total_duration)
+                
+                # 计算综合分数
+                score = self.calculate_segment_score(
+                    video_path, 
+                    str(temp_audio_path),
+                    start_time, 
+                    end_time, 
+                    total_duration
+                )
+                
+                segments.append({
+                    'index': i,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'duration': end_time - start_time,
+                    'score': score
+                })
+                
+                self.logger.debug(f"片段 {i+1}/{num_segments}: {start_time:.1f}s-{end_time:.1f}s, 分数: {score:.3f}")
             
-            segments.append({
-                'index': i,
-                'start_time': start_time,
-                'end_time': end_time,
-                'duration': end_time - start_time,
-                'score': score
-            })
+            # 按分数排序
+            segments.sort(key=lambda x: x['score'], reverse=True)
             
-            self.logger.debug(f"片段 {i+1}/{num_segments}: {start_time:.1f}s-{end_time:.1f}s, 分数: {score:.3f}")
-        
-        # 清理临时文件
-        if temp_audio_path.exists():
-            temp_audio_path.unlink()
-        
-        # 按分数排序
-        segments.sort(key=lambda x: x['score'], reverse=True)
-        
-        self.logger.info(f"视频分析完成，共 {len(segments)} 个片段")
-        return segments
+            self.logger.info(f"视频分析完成，共 {len(segments)} 个片段")
+            return segments
+            
+        finally:
+            # 确保清理临时文件
+            try:
+                if temp_audio_path.exists():
+                    temp_audio_path.unlink()
+                    self.logger.debug(f"已清理临时文件: {temp_audio_path}")
+            except Exception as e:
+                self.logger.warning(f"清理临时文件失败: {e}")
     
     def calculate_segment_score(self, video_path: str, audio_path: str,
                                start_time: float, end_time: float,

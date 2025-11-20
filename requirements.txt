@@ -13,10 +13,10 @@ imageio-ffmpeg==0.4.9
 # 音频处理 - 使用scipy替代pydub以兼容Python 3.13
 
 # AI和机器学习
-openai-whisper==20231117
-torch==2.1.0
-torchaudio==2.1.0
-numpy==1.24.3
+openai-whisper
+torch
+torchaudio
+numpy
 
 # 语音合成
 pyttsx3==2.90
@@ -29,7 +29,7 @@ scipy==1.11.4
 # SQLite3 已包含在Python标准库中
 
 # 系统工具
-psutil==5.9.6
+psutil>=5.9.0
 requests==2.31.0
 
 # 日志和配置

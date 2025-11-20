@@ -158,6 +158,31 @@ class SettingsDialog(QDialog):
         
         layout.addWidget(group_duration)
         
+        # 转场效果设置
+        group_transition = QGroupBox("🎬 转场效果")
+        form_transition = QFormLayout(group_transition)
+        form_transition.setSpacing(10)
+        form_transition.setContentsMargins(12, 16, 12, 12)
+        
+        self.check_transition_enabled = QCheckBox("启用转场效果")
+        form_transition.addRow("", self.check_transition_enabled)
+        
+        self.combo_transition_type = QComboBox()
+        self.combo_transition_type.addItems([
+            "fade", "dissolve", "slide_left", "slide_right",
+            "slide_up", "slide_down", "zoom_in", "zoom_out",
+            "wipe_left", "wipe_right"
+        ])
+        form_transition.addRow("转场类型:", self.combo_transition_type)
+        
+        self.spin_transition_duration = QDoubleSpinBox()
+        self.spin_transition_duration.setRange(0.1, 2.0)
+        self.spin_transition_duration.setSingleStep(0.1)
+        self.spin_transition_duration.setSuffix(" 秒")
+        form_transition.addRow("转场时长:", self.spin_transition_duration)
+        
+        layout.addWidget(group_transition)
+        
         # 性能设置
         group_perf = QGroupBox("⚡ 性能设置")
         form_perf = QFormLayout(group_perf)
@@ -272,6 +297,12 @@ class SettingsDialog(QDialog):
         self.spin_min_duration.setValue(self.config.get('processing.target_duration_min', 180))
         self.spin_max_duration.setValue(self.config.get('processing.target_duration_max', 300))
         self.spin_segment_duration.setValue(self.config.get('processing.segment_duration', 10))
+        
+        # 转场效果
+        self.check_transition_enabled.setChecked(self.config.get('processing.transition_enabled', True))
+        self.combo_transition_type.setCurrentText(self.config.get('processing.transition_type', 'fade'))
+        self.spin_transition_duration.setValue(self.config.get('processing.transition_duration', 0.5))
+        
         self.spin_workers.setValue(self.config.get('processing.max_workers', 4))
         
         # AI
@@ -307,6 +338,12 @@ class SettingsDialog(QDialog):
         self.config.set('processing.target_duration_min', self.spin_min_duration.value())
         self.config.set('processing.target_duration_max', self.spin_max_duration.value())
         self.config.set('processing.segment_duration', self.spin_segment_duration.value())
+        
+        # 转场效果
+        self.config.set('processing.transition_enabled', self.check_transition_enabled.isChecked())
+        self.config.set('processing.transition_type', self.combo_transition_type.currentText())
+        self.config.set('processing.transition_duration', self.spin_transition_duration.value())
+        
         self.config.set('processing.max_workers', self.spin_workers.value())
         
         # AI

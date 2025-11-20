@@ -1,133 +1,106 @@
 # SmartCutElf - 智剪精灵
 
-一款基于AI的智能视频自动剪辑软件，能够自动识别视频中的精彩片段，智能剪辑并生成字幕。
+基于 AI 的智能视频自动剪辑软件，自动识别精彩片段并生成字幕。
 
-## 功能特点
+## ✨ 核心特性
 
-✨ **智能高光检测** - 基于音频和视频分析，自动识别精彩片段
-🎬 **自动视频剪辑** - 将长视频自动剪辑为3-5分钟精华内容
-📝 **智能字幕生成** - 使用OpenAI Whisper进行语音识别，自动生成字幕
-🎙️ **语音合成** - 支持文本转语音（TTS）
-🎨 **现代化界面** - 深色主题，简洁易用
-⚡ **高性能处理** - 多线程并行处理，支持批量操作
+| 功能 | 说明 |
+|------|------|
+| 🎯 智能高光检测 | 基于音频和视频分析，自动识别精彩片段 |
+| ✂️ 自动剪辑 | 将长视频剪辑为 3-5 分钟精华内容 |
+| 📝 字幕生成 | 使用 OpenAI Whisper 自动生成字幕 |
+| 🎙️ 语音合成 | 支持文本转语音（TTS） |
+| 🎨 转场效果 | 10 种转场效果（淡入淡出、滑动、缩放等） |
+| 🖥️ 现代界面 | 深色/浅色主题，简洁易用 |
+| ⚡ 批量处理 | 多线程并行处理 |
 
-## 技术栈
+## 🛠️ 技术栈
 
-- **界面框架**: PyQt5
-- **视频处理**: FFmpeg + OpenCV
-- **语音识别**: OpenAI Whisper
-- **语音合成**: pyttsx3
-- **数据库**: SQLite
-- **配置管理**: YAML
-
-## 快速开始
-
-### 安装依赖
-
-```bash
-pip install -r requirements.txt
+```
+界面：PyQt5
+视频：FFmpeg + OpenCV
+AI：OpenAI Whisper + pyttsx3
+数据：SQLite + YAML
 ```
 
-### 安装FFmpeg
-
-需要在系统中安装FFmpeg：
-
-**Windows:**
-1. 下载FFmpeg: https://ffmpeg.org/download.html
-2. 解压并添加到系统PATH
-
-**macOS:**
-```bash
-brew install ffmpeg
-```
-
-**Linux:**
-```bash
-sudo apt-get install ffmpeg  # Ubuntu/Debian
-sudo yum install ffmpeg      # CentOS/RHEL
-```
-
-### 运行应用
-
-```bash
-python main.py
-```
-
-## 使用说明
-
-1. **打开文件夹** - 点击"打开文件夹"按钮，选择包含视频文件的文件夹
-2. **选择视频** - 从列表中查看扫描到的视频文件
-3. **配置设置** - 根据需要调整剪辑参数（时长、字幕等）
-4. **开始处理** - 点击"开始处理"按钮，等待自动剪辑完成
-5. **查看结果** - 处理完成后，在输出文件夹中查看结果
-
-## 项目结构
+## 📁 项目结构
 
 ```
 SmartCutElf/
-├── main.py                 # 主程序入口
-├── config.yaml            # 配置文件
-├── requirements.txt       # 依赖列表
+├── main.py                    # 入口
+├── config.yaml               # 配置
+├── requirements.txt          # 依赖
 ├── src/
-│   ├── ui/               # 用户界面
-│   │   └── main_window.py
-│   ├── core/             # 核心功能
-│   │   ├── video_processor.py    # 视频处理
-│   │   ├── audio_analyzer.py     # 音频分析
-│   │   ├── video_analyzer.py     # 视频分析
-│   │   └── highlight_detector.py # 高光检测
-│   ├── ai/               # AI功能
-│   │   ├── speech_recognition.py # 语音识别
-│   │   ├── subtitle_generator.py # 字幕生成
-│   │   └── text_to_speech.py     # 语音合成
-│   └── utils/            # 工具模块
-│       ├── config.py            # 配置管理
-│       ├── logger.py            # 日志系统
-│       ├── database.py          # 数据库管理
-│       └── file_manager.py      # 文件管理
-├── assets/               # 资源文件
-├── logs/                 # 日志文件
-├── cache/                # 缓存目录
-└── output/               # 输出目录
+│   ├── ui/                   # 界面
+│   │   ├── main_window.py
+│   │   └── settings_dialog.py
+│   ├── core/                 # 核心
+│   │   ├── video_processor.py
+│   │   ├── highlight_detector.py
+│   │   ├── transition_effects.py
+│   │   └── workflow.py
+│   ├── ai/                   # AI
+│   │   ├── speech_recognition.py
+│   │   └── subtitle_generator.py
+│   └── utils/                # 工具
+│       ├── config.py
+│       └── logger.py
+├── tests/                    # 测试
+├── docs/                     # 文档
+└── output/                   # 输出
 ```
 
-## 配置说明
+## 🎯 开发状态
 
-可以通过编辑`config.yaml`文件来自定义各项设置：
+**当前版本**: v1.0.0
 
-- **processing**: 处理参数（目标时长、工作线程数等）
-- **highlight**: 高光检测参数（权重、灵敏度等）
-- **subtitle**: 字幕样式设置
-- **speech**: 语音识别和合成设置
-- **ui**: 界面主题设置
+| 模块 | 状态 |
+|------|------|
+| 基础架构 | ✅ 完成 |
+| 视频处理 | ✅ 完成 |
+| AI 功能 | ✅ 完成 |
+| 用户界面 | ✅ 完成 |
+| 转场效果 | ✅ 完成 |
+| 测试覆盖 | ✅ 完成 |
+| 打包部署 | ✅ 完成 |
+| 性能优化 | 🔄 进行中 |
 
-## 系统要求
+## 📚 文档
 
-- Python 3.8+
-- 8GB+ RAM
-- FFmpeg
-- （可选）CUDA支持的GPU用于加速
+- [启动指南](启动指南.md) - 安装和配置
+- [使用说明](使用说明.md) - 操作指南
+- [FFmpeg安装](FFmpeg安装指南.md) - FFmpeg 配置
+- [部署指南](部署指南.md) - 打包和分发
+- [技术设计](Technical_Design.md) - 架构设计
 
-## 开发状态
+## 🚀 快速开始
 
-当前版本: **v1.0.0**
+```bash
+# 1. 安装依赖
+pip install -r requirements.txt
 
-- [x] 项目基础架构
-- [x] 核心视频处理模块
-- [x] AI功能集成
-- [x] 用户界面
-- [ ] 完整的处理流程集成
-- [ ] 性能优化
-- [ ] 测试和打包
+# 2. 安装 FFmpeg（必须）
+# 查看 docs/FFmpeg安装指南.md
 
-## 许可证
+# 3. 启动应用
+python main.py
+```
+
+## ⚙️ 系统要求
+
+- **Python**: 3.8+
+- **内存**: 8GB+ 推荐
+- **FFmpeg**: 必须安装
+- **GPU**: 可选（CUDA 加速）
+
+## 📝 许可证
 
 MIT License
 
-## 贡献
+## 🤝 贡献
 
-欢迎提交Issue和Pull Request！
+欢迎提交 Issue 和 Pull Request！
 
-## 联系方式
+## 📧 联系
 
 项目主页: https://github.com/your-username/SmartCutElf
