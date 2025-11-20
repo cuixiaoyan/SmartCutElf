@@ -41,17 +41,7 @@ class SpeechRecognizer(LoggerMixin):
         except Exception as e:
             self.logger.error(f"模型加载失败: {e}")
             raise
-    
-    def _load_model(self):
-        """加载Whisper模型"""
-        try:
-            self.logger.info(f"正在加载Whisper模型: {self.model_size}")
-            self.model = whisper.load_model(self.model_size)
-            self.logger.info("模型加载成功")
-        except Exception as e:
-            self.logger.error(f"模型加载失败: {e}")
-            raise
-    
+
     def transcribe(self, audio_path: str, language: str = "zh") -> Optional[Dict]:
         """
         转录音频文件
@@ -64,11 +54,19 @@ class SpeechRecognizer(LoggerMixin):
             转录结果字典
         """
         if not self.model:
-            self.logger.error("模型未加载")
-            return None
+            try:
+                self._load_model()
+            except Exception:
+                return None
         
         try:
             self.logger.info(f"开始转录音频: {audio_path}")
+            print(f"DEBUG: 开始转录音频: {audio_path}")
+            
+            # 检查文件是否存在
+            if not Path(audio_path).exists():
+                self.logger.error(f"音频文件不存在: {audio_path}")
+                return None
             
             # 执行转录
             result = self.model.transcribe(
@@ -78,7 +76,13 @@ class SpeechRecognizer(LoggerMixin):
                 verbose=False
             )
             
-            self.logger.info(f"转录完成，识别到 {len(result.get('segments', []))} 个片段")
+            segment_count = len(result.get('segments', []))
+            self.logger.info(f"转录完成，识别到 {segment_count} 个片段")
+            print(f"DEBUG: 转录完成，识别到 {segment_count} 个片段")
+            
+            if segment_count == 0:
+                self.logger.warning("Whisper返回了0个片段")
+                
             return result
             
         except Exception as e:

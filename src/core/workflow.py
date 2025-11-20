@@ -214,10 +214,17 @@ class VideoProcessingWorkflow(LoggerMixin):
         try:
             self.logger.info("开始生成字幕...")
             
-            # 提取音频
+            # 提取音频 (从输出视频提取，以匹配剪辑后的时间轴)
             temp_audio = Path(output_video_path).parent / "temp_audio_subtitle.wav"
-            if not self.video_processor.extract_audio(video_path, str(temp_audio)):
+            # 注意：这里应该使用 output_video_path 而不是 video_path
+            if not self.video_processor.extract_audio(output_video_path, str(temp_audio)):
                 self.logger.error("音频提取失败")
+                return None
+            
+            # 检查音频文件大小
+            if temp_audio.stat().st_size < 1024:
+                self.logger.warning(f"提取的音频文件过小 ({temp_audio.stat().st_size} bytes)，可能没有声音")
+                temp_audio.unlink()
                 return None
             
             # 初始化语音识别（懒加载）

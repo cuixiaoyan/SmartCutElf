@@ -40,25 +40,16 @@ def main():
     except Exception as e:
         logger.error(f"设置 AppUserModelID 失败: {e}")
     
-    # 创建Qt应用
-    app = QApplication(sys.argv)
-    app.setApplicationName("SmartCutElf")
-    app.setOrganizationName("SmartCutElf")
-    
-    # 设置应用程序图标（使用绝对路径）
-    icon_path = Path(__file__).parent / 'assets' / 'app_icon.ico'
-    if icon_path.exists():
-        from PyQt5.QtGui import QIcon
-        app.setWindowIcon(QIcon(str(icon_path)))
-        logger.info(f"应用程序图标已设置: {icon_path}")
-    else:
-        logger.warning(f"图标文件不存在: {icon_path}")
-    
-    # 高DPI支持
+    # 高DPI支持 (必须在创建QApplication之前设置)
     if hasattr(Qt, 'AA_EnableHighDpiScaling'):
         QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     if hasattr(Qt, 'AA_UseHighDpiPixmaps'):
         QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+        
+    # 创建Qt应用
+    app = QApplication(sys.argv)
+    app.setApplicationName("SmartCutElf")
+    app.setOrganizationName("SmartCutElf")
     
     # 创建主窗口
     main_window = MainWindow()

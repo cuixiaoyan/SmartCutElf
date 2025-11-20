@@ -29,10 +29,10 @@ processing:
   target_duration_max: 300
   target_duration_min: 180
 speech:
-  background_music: false
+  background_music: true
   music_volume: 30
   recognition_model: base
-  tts_enabled: false
+  tts_enabled: true
   tts_voice: female
 subtitle:
   enabled: true
