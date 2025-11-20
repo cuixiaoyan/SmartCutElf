@@ -17,6 +17,16 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.config = get_config()
+        
+        # 设置对话框大小为屏幕的一半并居中
+        from PyQt5.QtWidgets import QDesktopWidget
+        screen = QDesktopWidget().screenGeometry()
+        dialog_width = screen.width() // 2
+        dialog_height = screen.height() // 2
+        x = (screen.width() - dialog_width) // 2
+        y = (screen.height() - dialog_height) //2
+        self.setGeometry(x, y, dialog_width, dialog_height)
+        
         self._init_ui()
         self._load_settings()
         
