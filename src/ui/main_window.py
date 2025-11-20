@@ -71,6 +71,14 @@ class MainWindow(QMainWindow):
         self.setGeometry(50, 50, 1820, 1170)  # 1400*1.3=1820, 900*1.3=1170
         self.setMinimumSize(1560, 975)  # 1200*1.3=1560, 750*1.3=975
         
+        # 设置窗口图标
+        icon_path = Path(__file__).parent.parent.parent / 'assets' / 'app_icon.ico'
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+            self.logger.info(f"窗口图标已设置: {icon_path}")
+        else:
+            self.logger.warning(f"图标文件不存在: {icon_path}")
+        
         # 创建菜单栏
         self._create_menu_bar()
         
