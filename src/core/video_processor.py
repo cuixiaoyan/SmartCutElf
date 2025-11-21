@@ -5,9 +5,16 @@
 
 import subprocess
 import json
+import sys
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from utils.logger import LoggerMixin
+
+# Windows上隐藏subprocess控制台窗口
+if sys.platform == 'win32':
+    CREATE_NO_WINDOW = 0x08000000
+else:
+    CREATE_NO_WINDOW = 0
 
 
 class VideoProcessor(LoggerMixin):
@@ -79,6 +86,7 @@ class VideoProcessor(LoggerMixin):
                 text=True, 
                 encoding='utf-8',
                 errors='ignore',  # 忽略无法解码的字符
+                creationflags=CREATE_NO_WINDOW,  # 隐藏控制台窗口
                 check=True
             )
             data = json.loads(result.stdout)
@@ -166,7 +174,7 @@ class VideoProcessor(LoggerMixin):
             
             self.logger.debug(f"音频提取命令: {' '.join(cmd)}")
             
-            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore')
+            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', creationflags=CREATE_NO_WINDOW)
             
             if result.returncode != 0:
                 error_msg = f"音频提取失败 (returncode: {result.returncode})\n"
@@ -217,7 +225,7 @@ class VideoProcessor(LoggerMixin):
             # 验证FFmpeg可用性
             try:
                 test_result = subprocess.run([self.ffmpeg_path, '-version'], 
-                                           capture_output=True, timeout=10)
+                                           capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
                 if test_result.returncode != 0:
                     raise Exception(f"FFmpeg不可用: {self.ffmpeg_path}")
             except Exception as e:
@@ -273,7 +281,7 @@ class VideoProcessor(LoggerMixin):
                 
                 try:
                     result = subprocess.run(cmd, capture_output=True, encoding='utf-8', 
-                                          errors='replace', timeout=300)  # 5分钟超时
+                                          errors='replace', timeout=300, creationflags=CREATE_NO_WINDOW)  # 5分钟超时
                 except subprocess.TimeoutExpired:
                     self.logger.warning(f"片段 {i+1} 剪切超时，跳过")
                     failed_segments.append({
@@ -304,7 +312,7 @@ class VideoProcessor(LoggerMixin):
                     
                     try:
                         backup_result = subprocess.run(backup_cmd, capture_output=True, 
-                                                     encoding='utf-8', errors='replace', timeout=300)
+                                                     encoding='utf-8', errors='replace', timeout=300, creationflags=CREATE_NO_WINDOW)
                         
                         if backup_result.returncode != 0:
                             # 两种方法都失败，记录并跳过
@@ -532,7 +540,7 @@ class VideoProcessor(LoggerMixin):
                     output_path
                 ]
             
-            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore')
+            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', creationflags=CREATE_NO_WINDOW)
             
             if result.returncode != 0:
                 self.logger.error(f"视频合并失败: {result.stderr}")
@@ -574,7 +582,7 @@ class VideoProcessor(LoggerMixin):
                 output_path
             ]
             
-            subprocess.run(cmd, capture_output=True, check=True)
+            subprocess.run(cmd, capture_output=True, check=True, creationflags=CREATE_NO_WINDOW)
             self.logger.info(f"字幕添加成功: {output_path}")
             return True
             
@@ -615,7 +623,7 @@ class VideoProcessor(LoggerMixin):
                 output_path
             ]
             
-            subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True)
+            subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True, creationflags=CREATE_NO_WINDOW)
             self.logger.info(f"视频尺寸调整成功: {output_path}")
             return True
             

@@ -71,7 +71,7 @@ class Config:
         
         # UI设置
         "ui": {
-            "theme": "dark",  # light, dark
+            "theme": "light",  # light, dark
             "window_width": 1200,
             "window_height": 800
         },
@@ -84,13 +84,26 @@ class Config:
         }
     }
     
-    def __init__(self, config_file: str = "config.yaml"):
+    def __init__(self, config_file: str = None):
         """
         初始化配置管理器
         
         Args:
-            config_file: 配置文件路径
+            config_file: 配置文件路径（可选，默认使用用户目录）
         """
+        if config_file is None:
+            # 使用用户目录存储配置，避免每次打包后配置丢失
+            # Windows: C:\Users\{用户名}\AppData\Roaming\SmartCutElf\config.yaml
+            # Linux/Mac: ~/.config/SmartCutElf/config.yaml
+            if os.name == 'nt':  # Windows
+                app_data = Path(os.getenv('APPDATA', '~'))
+            else:  # Linux/Mac
+                app_data = Path.home() / '.config'
+            
+            config_dir = app_data / 'SmartCutElf'
+            config_dir.mkdir(parents=True, exist_ok=True)
+            config_file = str(config_dir / 'config.yaml')
+        
         self.config_file = Path(config_file)
         self.config: Dict[str, Any] = {}
         
@@ -115,6 +128,9 @@ class Config:
     def save(self):
         """保存配置"""
         try:
+            # 确保配置目录存在
+            self.config_file.parent.mkdir(parents=True, exist_ok=True)
+            
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 if self.config_file.suffix == '.yaml' or self.config_file.suffix == '.yml':
                     yaml.dump(self.config, f, allow_unicode=True, default_flow_style=False)

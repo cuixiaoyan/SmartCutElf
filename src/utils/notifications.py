@@ -4,8 +4,15 @@
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Optional
+
+# Windows上隐藏subprocess控制台窗口
+if sys.platform == 'win32':
+    CREATE_NO_WINDOW = 0x08000000
+else:
+    CREATE_NO_WINDOW = 0
 
 
 class SystemNotifier:
@@ -73,7 +80,8 @@ class SystemNotifier:
             subprocess.run(
                 ["powershell", "-Command", ps_script],
                 capture_output=True,
-                timeout=5
+                timeout=5,
+                creationflags=CREATE_NO_WINDOW
             )
         except Exception as e:
             print(f"发送通知失败: {e}")
@@ -85,7 +93,8 @@ class SystemNotifier:
             subprocess.run(
                 ["notify-send", title, message],
                 capture_output=True,
-                timeout=5
+                timeout=5,
+                creationflags=CREATE_NO_WINDOW
             )
         except:
             pass
@@ -107,9 +116,9 @@ class FileOperations:
                 os.startfile(str(path))
             elif os.name == 'posix':  # Linux/Mac
                 if os.uname().sysname == 'Darwin':  # Mac
-                    subprocess.run(['open', str(path)])
+                    subprocess.run(['open', str(path)], creationflags=CREATE_NO_WINDOW)
                 else:  # Linux
-                    subprocess.run(['xdg-open', str(path)])
+                    subprocess.run(['xdg-open', str(path)], creationflags=CREATE_NO_WINDOW)
             return True
         except Exception as e:
             print(f"打开文件夹失败: {e}")
@@ -128,9 +137,9 @@ class FileOperations:
                 os.startfile(str(path))
             elif os.name == 'posix':  # Linux/Mac
                 if os.uname().sysname == 'Darwin':  # Mac
-                    subprocess.run(['open', str(path)])
+                    subprocess.run(['open', str(path)], creationflags=CREATE_NO_WINDOW)
                 else:  # Linux
-                    subprocess.run(['xdg-open', str(path)])
+                    subprocess.run(['xdg-open', str(path)], creationflags=CREATE_NO_WINDOW)
             return True
         except Exception as e:
             print(f"打开文件失败: {e}")
@@ -146,13 +155,13 @@ class FileOperations:
         
         try:
             if os.name == 'nt':  # Windows
-                subprocess.run(['explorer', '/select,', str(path)])
+                subprocess.run(['explorer', '/select,', str(path)], creationflags=CREATE_NO_WINDOW)
             elif os.name == 'posix':
                 if os.uname().sysname == 'Darwin':  # Mac
-                    subprocess.run(['open', '-R', str(path)])
+                    subprocess.run(['open', '-R', str(path)], creationflags=CREATE_NO_WINDOW)
                 else:  # Linux
                     # 打开父文件夹
-                    subprocess.run(['xdg-open', str(path.parent)])
+                    subprocess.run(['xdg-open', str(path.parent)], creationflags=CREATE_NO_WINDOW)
             return True
         except Exception as e:
             print(f"显示文件失败: {e}")

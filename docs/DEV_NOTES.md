@@ -1,95 +1,95 @@
-# 开发说明与问题修复记录
+# 开发笔记
 
-本文档汇总了项目开发过程中的功能优化、问题修复及技术细节。
+## 最近修复 (2025-11-21)
 
-## 1. 功能优化总结
+### 打包问题修复
+- ✅ 修复CMD终端窗口频繁弹出 - 为所有subprocess调用添加CREATE_NO_WINDOW标志
+- ✅ 修复应用图标显示问题 - 使用PyInstaller资源路径处理
+- ✅ 修复配置文件丢失 - 配置改为保存到用户AppData目录
 
-### 新增模块
+### 配置管理
+配置文件位置：`C:\Users\{用户名}\AppData\Roaming\SmartCutElf\config.yaml`
 
-#### 1.1 错误处理 (`error_handler.py`)
-- 15+ 错误代码分类
-- 中文友好提示和解决方案
-- 文档链接
+## 依赖管理
 
-#### 1.2 性能优化 (`performance.py`)
-- 内存监控（80%警告/90%危险）
-- 断点续传支持
-- 智能时间预估
-
-#### 1.3 用户体验 (`notifications.py`)
-- 桌面通知（跨平台）
-- 文件快捷操作
-- 剪贴板支持
-
-#### 1.4 配置预设 (`config_presets.py`)
-6种预设模式：快速/平衡/高质量/仅字幕/短视频/长视频
-
-#### 1.5 增强日志 (`debug_logger.py`)
-- 用户模式 vs 调试模式
-- 图标化日志
-- 日志导出
-
-#### 1.6 UI组件 (`enhanced_widgets.py`)
-- 预设选择器
-- 增强进度显示
-- 快捷操作按钮
-- 错误对话框
-
-### 预设模式对比
-
-| 模式 | 速度 | 质量 | 字幕 | 适用 |
-|------|------|------|------|------|
-| ⚡ 快速 | ⚡⚡⚡ | ⭐⭐ | ❌ | 测试 |
-| ⚖️ 平衡 | ⚡⚡ | ⭐⭐⭐ | ✅ | 日常 |
-| 💎 高质量 | ⚡ | ⭐⭐⭐⭐⭐ | ✅ | 发布 |
-| 📝 仅字幕 | ⚡⚡⚡ | - | ✅ | 字幕 |
-| 📱 短视频 | ⚡⚡ | ⭐⭐⭐ | ✅ | 抖音 |
-| 🎬 长视频 | ⚡ | ⭐⭐⭐⭐ | ✅ | B站 |
-
----
-
-## 2. 视频白屏问题修复
-
-### 问题描述
-视频开头出现白屏或花屏。
-
-### 原因分析
-使用 `-c copy` 快速剪辑时，剪辑点不在关键帧（I-frame）上，导致播放器无法正确解码。
-
-### 解决方案
-使用 `libx264` 重新编码，而不是直接拷贝流。
-
-```python
-# 推荐配置（平衡模式）
-cmd = [
-    '-ss', str(start),      # 先定位
-    '-i', video_path,
-    '-t', str(end - start), # 使用持续时间
-    '-c:v', 'libx264',      # 重新编码
-    '-preset', 'fast',      # 编码速度
-    '-crf', '23',           # 质量控制
-    '-c:a', 'aac',          # 音频编码
-    '-b:a', '192k',         # 音频比特率
-    '-movflags', '+faststart',  # 优化播放
-    '-y', output_path
-]
+### 核心依赖
+```
+PyQt5>=5.15.0
+numpy>=1.24.0
+opencv-python>=4.8.0
+ffmpeg-python>=0.2.0
+openai-whisper>=20231117
+PyYAML>=6.0
 ```
 
----
+### 已排除的依赖（打包优化）
+- torch (1GB+) - 打包时排除，运行时由Whisper自动下载
+- scipy - 非必需，已移除
+- pyttsx3 - TTS功能暂未使用
 
-## 3. 临时文件问题修复
+## 打包说明
 
-### 问题描述
-临时音频文件保存在视频目录导致权限问题和文件名冲突。
+### 快速打包 (约40秒)
+```bash
+python scripts/build.py
+```
 
-### 解决方案
-使用系统临时目录，并实现自动清理机制。
+### 优化策略
+- 使用onedir模式（比onefile快20倍）
+- 排除torch和不需要的PyQt5模块
+- 输出大小约420MB
 
-#### 3.1 临时文件管理器 (`src/utils/temp_file_manager.py`)
-- 创建唯一临时文件
-- 自动清理过期文件
-- 统计空间占用
+## FFmpeg配置
 
-#### 3.2 临时文件位置
-- **Windows:** `C:\Users\{用户}\AppData\Local\Temp\SmartCutElf\temp_audio\`
-- **Linux/Mac:** `/tmp/SmartCutElf/temp_audio/`
+需要在系统PATH中或项目指定路径配置FFmpeg。详见 [FFmpeg安装指南](FFmpeg安装指南.md)
+
+## 已知问题
+
+### Windows控制台窗口
+- **已修复** - 所有subprocess调用已添加CREATE_NO_WINDOW标志
+
+### Unicode路径问题
+- FFmpeg在Windows上处理中文路径时使用临时目录避免编码问题
+
+## 项目结构
+
+```
+src/
+├── core/
+│   ├── video_processor.py    # 视频处理（FFmpeg封装）
+│   └── ai_processor.py        # AI处理（Whisper集成）
+├── ui/
+│   ├── main_window.py         # 主窗口
+│   └── settings_dialog.py     # 设置对话框
+└── utils/
+    ├── config.py              # 配置管理
+    ├── logger.py              # 日志系统
+    └── notifications.py       # 系统通知
+```
+
+## 开发技巧
+
+### 日志调试
+日志文件位置：`logs/smartcutelf.log`
+
+### 配置重置
+删除配置文件即可重置：
+```powershell
+Remove-Item "$env:APPDATA\SmartCutElf\config.yaml"
+```
+
+### 增量打包
+去掉build.py中的`--clean`参数可加快重复打包速度
+
+## 性能优化
+
+- 使用多线程处理视频片段
+- FFmpeg参数优化（preset=fast, crf=23）
+- 临时文件及时清理
+
+## 待办事项
+
+- [ ] 增加批量处理功能
+- [ ] 优化AI模型加载速度
+- [ ] 支持更多视频格式
+- [ ] 添加视频预览功能
