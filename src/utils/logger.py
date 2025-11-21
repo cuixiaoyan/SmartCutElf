@@ -13,7 +13,7 @@ from logging.handlers import RotatingFileHandler
 def setup_logger(
     name: str = "SmartCutElf",
     log_dir: str = "logs",
-    log_level: int = logging.DEBUG,
+    log_level: int = logging.INFO,  # 优化：改为INFO级别
     console_level: int = logging.INFO,
     max_bytes: int = 10 * 1024 * 1024,  # 10MB
     backup_count: int = 5

@@ -58,6 +58,10 @@ class MainWindow(QMainWindow):
         self.current_project_id = None
         self.processing_thread = None
         
+        # 内存监控
+        from utils.memory_monitor import get_memory_monitor
+        self.memory_monitor = get_memory_monitor()
+        
         # 连接主题变更信号
         self.theme_manager.theme_changed.connect(self._on_theme_changed)
         
@@ -156,6 +160,20 @@ class MainWindow(QMainWindow):
         is_enabled = self.config.get('subtitle.enabled', True) or self.config.get('speech.tts_enabled', False)
         self.chk_ai_enabled.setChecked(is_enabled)
         toolbar.addWidget(self.chk_ai_enabled)
+        
+        toolbar.addSpacing(16)
+        
+        # 配置预设选择器
+        from PyQt5.QtWidgets import QComboBox
+        preset_label = QLabel('预设:')
+        toolbar.addWidget(preset_label)
+        
+        self.preset_selector = QComboBox()
+        self.preset_selector.addItems(['标准', '快速', '高质量', '短视频', 'B站'])
+        self.preset_selector.setFixedWidth(85)
+        self.preset_selector.setToolTip('选择配置预设模式')
+        self.preset_selector.currentTextChanged.connect(self.on_preset_changed)
+        toolbar.addWidget(self.preset_selector)
         
         toolbar.addSpacing(16)
         
@@ -259,6 +277,18 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage('就绪')
+        
+        # 添加内存显示
+        self.memory_label = QLabel()
+        self.memory_label.setStyleSheet("color: #666; font-size: 11px;")
+        self.status_bar.addPermanentWidget(self.memory_label)
+        
+        # 启动内存监控定时器
+        from PyQt5.QtCore import QTimer
+        self.memory_timer = QTimer(self)
+        self.memory_timer.timeout.connect(self.update_memory_display)
+        self.memory_timer.start(2000)  # 每2秒更新
+        self.update_memory_display()  # 立即更新一次
     
     def _apply_theme(self):
         """应用主题样式"""
@@ -291,6 +321,34 @@ class MainWindow(QMainWindow):
         self.config.set('ui.theme', self.theme_manager.current_theme)
         self.config.save()
         self.add_status_message(f"✨ 已切换到{'深色' if self.theme_manager.current_theme == 'dark' else '浅色'}主题")
+    
+    def on_preset_changed(self, preset_name: str):
+        """配置预设改变"""
+        if not preset_name:
+            return
+        
+        preset_map = {
+            '标准': 'standard',
+            '快速': 'fast',
+            '高质量': 'high_quality',
+            '短视频': 'short_video',
+            'B站': 'bilibili'
+        }
+        
+        if preset_name in preset_map:
+            from utils.config_presets import ConfigPresets
+            preset_id = preset_map[preset_name]
+            preset_info = ConfigPresets.apply_preset(self.config, preset_id)
+            self.add_status_message(f"✨ 已应用预设: {preset_info}")
+            self.logger.info(f"配置预设已切换到: {preset_name}")
+    
+    def update_memory_display(self):
+        """更新内存显示"""
+        try:
+            mem_str = self.memory_monitor.get_memory_str()
+            self.memory_label.setText(f"💾 {mem_str}")
+        except Exception as e:
+            self.logger.debug(f"更新内存显示失败: {e}")
     
     def open_folder(self):
         """打开文件夹选择对话框"""
