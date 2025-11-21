@@ -29,6 +29,19 @@ python scripts/build.py
 - ⚙️ **灵活配置** - 支持自定义输出格式、分辨率等参数
 - 🎨 **现代UI** - 简洁易用的图形界面
 
+## 界面预览
+
+<div align="center">
+    <img src="images/image-1.png" alt="SmartCutElf 主界面" width="800"/>
+    <p><i>主界面 - 简洁直观的操作面板</i></p>
+    <br/>
+    <img src="images/image-2.png" alt="处理中" width="800"/>
+    <p><i>处理状态 - 实时显示进度和日志</i></p>
+    <br/>
+    <img src="images/image-3.png" alt="设置界面" width="800"/>
+    <p><i>设置选项 - 丰富的自定义配置</i></p>
+</div>
+
 ## 文档
 
 - [使用说明](docs/使用说明.md) - 用户操作指南
