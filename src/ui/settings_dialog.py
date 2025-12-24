@@ -95,19 +95,31 @@ class SettingsDialog(QDialog):
         self.check_auto_open = QCheckBox("处理完成后自动打开文件夹")
         form_output.addRow("", self.check_auto_open)
         
+        
         layout.addWidget(group_output)
         
-        # 界面设置
-        group_ui = QGroupBox("🎨 界面设置")
-        form_ui = QFormLayout(group_ui)
-        form_ui.setSpacing(10)
-        form_ui.setContentsMargins(12, 16, 12, 12)
+        # 环境设置
+        group_env = QGroupBox("🔧 环境设置")
+        form_env = QFormLayout(group_env)
+        form_env.setSpacing(10)
+        form_env.setContentsMargins(12, 16, 12, 12)
         
-        self.combo_theme = QComboBox()
-        self.combo_theme.addItems(["dark", "light"])
-        form_ui.addRow("主题颜色:", self.combo_theme)
+        ffmpeg_layout = QHBoxLayout()
+        ffmpeg_layout.setSpacing(8)
+        self.input_ffmpeg_path = QLineEdit()
+        self.input_ffmpeg_path.setPlaceholderText("系统默认 (自动查找)")
+        self.btn_browse_ffmpeg = QPushButton("📂 浏览...")
+        self.btn_browse_ffmpeg.setMinimumWidth(90)
+        self.btn_browse_ffmpeg.clicked.connect(self._browse_ffmpeg_path)
+        ffmpeg_layout.addWidget(self.input_ffmpeg_path)
+        ffmpeg_layout.addWidget(self.btn_browse_ffmpeg)
         
-        layout.addWidget(group_ui)
+        form_env.addRow("FFmpeg 路径:", ffmpeg_layout)
+        layout.addWidget(group_env)
+        
+        # 界面设置 - 已移除
+        # ...
+        
         layout.addStretch()
         return widget
 
@@ -273,12 +285,21 @@ class SettingsDialog(QDialog):
         if path:
             self.input_output_dir.setText(path)
 
+    def _browse_ffmpeg_path(self):
+        """浏览FFmpeg可执行文件"""
+        file, _ = QFileDialog.getOpenFileName(self, "选择 FFmpeg 可执行文件", "", "Executables (*.exe);;All Files (*)")
+        if file:
+            self.input_ffmpeg_path.setText(file)
+
     def _load_settings(self):
         """加载设置"""
-        # 常规
         self.input_output_dir.setText(self.config.get('output.folder', 'output'))
         self.check_auto_open.setChecked(self.config.get('output.auto_open', False))
-        self.combo_theme.setCurrentText(self.config.get('ui.theme', 'dark'))
+        
+        # 环境
+        self.input_ffmpeg_path.setText(self.config.get('paths.ffmpeg', ''))
+        
+        # self.combo_theme.setCurrentText(self.config.get('ui.theme', 'dark'))
         
         # 剪辑
         self.combo_orientation.setCurrentText(self.config.get('processing.orientation', 'original'))
@@ -323,7 +344,16 @@ class SettingsDialog(QDialog):
         # 常规
         self.config.set('output.folder', self.input_output_dir.text())
         self.config.set('output.auto_open', self.check_auto_open.isChecked())
-        self.config.set('ui.theme', self.combo_theme.currentText())
+        
+        # 环境
+        ffmpeg_path = self.input_ffmpeg_path.text().strip()
+        if ffmpeg_path:
+            self.config.set('paths.ffmpeg', ffmpeg_path)
+        else:
+            # 如果清空了，可以移除配置或者设为空字符串
+             self.config.set('paths.ffmpeg', '')
+             
+        # self.config.set('ui.theme', self.combo_theme.currentText())
         
         # 剪辑
         # 获取选中的值

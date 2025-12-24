@@ -99,8 +99,8 @@ class MainWindow(QMainWindow):
         
         # 主布局
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(12, 10, 12, 10)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setSpacing(16)
         
         # 顶部工具栏
         toolbar_layout = self._create_toolbar()
@@ -130,25 +130,31 @@ class MainWindow(QMainWindow):
     def _create_toolbar(self) -> QHBoxLayout:
         """创建工具栏"""
         toolbar = QHBoxLayout()
-        toolbar.setSpacing(8)
+        toolbar.setSpacing(12)
         
         # 打开文件夹按钮
         self.btn_open = QPushButton('📂 打开文件夹')
-        self.btn_open.setFixedWidth(125)
+        self.btn_open.setMinimumWidth(120) # 使用MinimumWidth允许伸缩
         self.btn_open.clicked.connect(self.open_folder)
         toolbar.addWidget(self.btn_open)
         
+        # 增加间距
+        toolbar.addSpacing(16)
+        
         # 开始处理按钮
         self.btn_start = QPushButton('▶️ 开始处理')
-        self.btn_start.setFixedWidth(115)
+        self.btn_start.setMinimumWidth(120)
         self.btn_start.setProperty("primary", True)
         self.btn_start.setEnabled(False)
         self.btn_start.clicked.connect(self.start_processing)
         toolbar.addWidget(self.btn_start)
         
+        # 增加间距
+        toolbar.addSpacing(12)
+        
         # 停止按钮
         self.btn_stop = QPushButton('⏹️ 停止')
-        self.btn_stop.setFixedWidth(80)
+        self.btn_stop.setMinimumWidth(80)
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_processing)
         toolbar.addWidget(self.btn_stop)
@@ -161,28 +167,42 @@ class MainWindow(QMainWindow):
         self.chk_ai_enabled.setChecked(is_enabled)
         toolbar.addWidget(self.chk_ai_enabled)
         
-        toolbar.addSpacing(16)
+        toolbar.addSpacing(20)
         
-        # 配置预设选择器
-        from PyQt5.QtWidgets import QComboBox
+        # 配置预设 (切换按钮)
+        from PyQt5.QtWidgets import QButtonGroup
         preset_label = QLabel('预设:')
         toolbar.addWidget(preset_label)
         
-        self.preset_selector = QComboBox()
-        self.preset_selector.addItems(['标准', '快速', '高质量', '短视频', 'B站'])
-        self.preset_selector.setFixedWidth(85)
-        self.preset_selector.setToolTip('选择配置预设模式')
-        self.preset_selector.currentTextChanged.connect(self.on_preset_changed)
-        toolbar.addWidget(self.preset_selector)
+        self.preset_group = QButtonGroup(self)
+        self.preset_group.setExclusive(True)
         
-        toolbar.addSpacing(16)
+        # 标准模式按钮
+        self.btn_preset_std = QPushButton('标准')
+        self.btn_preset_std.setFixedWidth(80) #稍微减小一点固定宽度
+        self.btn_preset_std.setCheckable(True)
+        self.btn_preset_std.setChecked(True)
+        self.btn_preset_std.clicked.connect(lambda: self.on_preset_changed('标准'))
+        self.preset_group.addButton(self.btn_preset_std)
+        toolbar.addWidget(self.btn_preset_std)
         
-        # 主题切换按钮
-        self.btn_theme = QPushButton('深色模式')
-        self.btn_theme.setFixedWidth(85)
-        self.btn_theme.setProperty("secondary", True)
-        self.btn_theme.clicked.connect(self.toggle_theme)
-        toolbar.addWidget(self.btn_theme)
+        # 快速模式按钮
+        self.btn_preset_fast = QPushButton('快速')
+        self.btn_preset_fast.setFixedWidth(80)
+        self.btn_preset_fast.setCheckable(True)
+        self.btn_preset_fast.setProperty("secondary", True) # 默认非选中样式
+        self.btn_preset_fast.clicked.connect(lambda: self.on_preset_changed('快速'))
+        self.preset_group.addButton(self.btn_preset_fast)
+        toolbar.addWidget(self.btn_preset_fast)
+        
+        # 连接按钮切换样式逻辑
+        self.preset_group.buttonClicked.connect(self._update_preset_buttons)
+        
+        toolbar.addSpacing(20)
+        
+        # 主题切换按钮 已移除
+        # self.btn_theme = QPushButton('深色模式')
+        # ...
         
         # 设置按钮
         self.btn_settings = QPushButton('⚙️ 设置')
@@ -197,17 +217,17 @@ class MainWindow(QMainWindow):
         """创建左侧文件列表面板"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # 标题区域
         title_layout = QHBoxLayout()
         title = QLabel('📹 视频文件列表')
-        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        title.setStyleSheet("font-weight: bold; font-size: 14px;") # 显式加粗
         title_layout.addWidget(title)
         title_layout.addStretch()
         
         # 文件数量标签
         self.file_count_label = QLabel('0 个文件')
-        self.file_count_label.setStyleSheet("color: #86868B; font-size: 12px;")
         title_layout.addWidget(self.file_count_label)
         
         layout.addLayout(title_layout)
@@ -234,6 +254,7 @@ class MainWindow(QMainWindow):
         """创建右侧预览面板"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # 标题
         title = QLabel('📊 处理状态与进度')
@@ -243,11 +264,12 @@ class MainWindow(QMainWindow):
         # 进度信息
         progress_layout = QHBoxLayout()
         self.progress_label = QLabel('等待开始...')
+        self.progress_label.setStyleSheet("font-weight: bold;") # 加粗进度文字
         progress_layout.addWidget(self.progress_label)
         progress_layout.addStretch()
         
         self.progress_percent_label = QLabel('0%')
-        self.progress_percent_label.setStyleSheet("font-weight: bold;")
+        self.progress_percent_label.setStyleSheet("font-weight: bold; color: #9F85FF; font-size: 14px;") # 高亮百分比
         progress_layout.addWidget(self.progress_percent_label)
         
         layout.addLayout(progress_layout)
@@ -260,7 +282,7 @@ class MainWindow(QMainWindow):
         
         # 状态日志标题
         log_title = QLabel('📝 处理日志')
-        log_title.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 8px;")
+        # log_title.setStyleSheet("font-weight: bold; font-size: 14px; margin-top: 8px;")
         layout.addWidget(log_title)
         
         # 状态文本
@@ -280,7 +302,7 @@ class MainWindow(QMainWindow):
         
         # 添加内存显示
         self.memory_label = QLabel()
-        self.memory_label.setStyleSheet("color: #666; font-size: 11px;")
+        # self.memory_label.setStyleSheet("color: #666; font-size: 11px;")
         self.status_bar.addPermanentWidget(self.memory_label)
         
         # 启动内存监控定时器
@@ -299,6 +321,30 @@ class MainWindow(QMainWindow):
         
         # 更新主题按钮文本
         self._update_theme_button_text()
+        
+        # 更新预设按钮样式
+        self._update_preset_buttons()
+
+    def _update_preset_buttons(self, _=None):
+        """更新预设按钮的样式"""
+        if hasattr(self, 'btn_preset_std') and hasattr(self, 'btn_preset_fast'):
+            # 标准按钮
+            if self.btn_preset_std.isChecked():
+                self.btn_preset_std.setProperty("secondary", False)
+            else:
+                self.btn_preset_std.setProperty("secondary", True)
+            
+            # 快速按钮
+            if self.btn_preset_fast.isChecked():
+                self.btn_preset_fast.setProperty("secondary", False)
+            else:
+                self.btn_preset_fast.setProperty("secondary", True)
+                
+            # 刷新样式
+            self.btn_preset_std.style().unpolish(self.btn_preset_std)
+            self.btn_preset_std.style().polish(self.btn_preset_std)
+            self.btn_preset_fast.style().unpolish(self.btn_preset_fast)
+            self.btn_preset_fast.style().polish(self.btn_preset_fast)
     
     def _on_theme_changed(self, theme_name: str):
         """主题变更回调"""
@@ -561,6 +607,17 @@ class MainWindow(QMainWindow):
     def add_status_message(self, message: str):
         """添加状态消息"""
         self.status_text.append(message)
+        
+        # 限制日志行数，防止内存溢出
+        # 如果超过20000字符，删除前面的内容
+        if len(self.status_text.toPlainText()) > 20000:
+            cursor = self.status_text.textCursor()
+            cursor.movePosition(cursor.Start)
+            cursor.movePosition(cursor.Down, cursor.KeepAnchor, 100) # 删除前100行
+            cursor.removeSelectedText()
+            cursor.movePosition(cursor.End)
+            self.status_text.setTextCursor(cursor)
+            
         # 滚动到底部
         scrollbar = self.status_text.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())

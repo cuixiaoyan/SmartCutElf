@@ -12,18 +12,23 @@ output:
   audio_codec: aac
   auto_open: true
   bitrate: 5000k
-  folder: D:/上传资料测试/shipin/new
+  folder: ./output
   format: mp4
   fps: 30
   resolution: 1080p
   video_codec: libx264
+  # 编码预设: ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow
+  preset: medium
+  # CRF (Constant Rate Factor): 0-51, 越小质量越高，建议 18-28
+  crf: 23
 performance:
   cache_enabled: true
   cache_size_mb: 500
   memory_limit_mb: 2048
 processing:
   auto_delete_temp: true
-  max_workers: 4
+  max_workers: 4       # 总体并行视频处理数量
+  max_segment_workers: 4 # 单个视频的分段并行数量 (建议设置为CPU核心数的一半)
   orientation: original
   segment_duration: 10
   target_duration_max: 300
