@@ -8,6 +8,7 @@ import json
 import sys
 import shutil
 import time
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 from utils.logger import LoggerMixin
@@ -239,6 +240,14 @@ class VideoProcessor(LoggerMixin):
             if not Path(video_path).exists():
                 self.logger.error(f"视频文件不存在: {video_path}")
                 return False
+
+            video_info = self.get_video_info(video_path)
+            if not video_info:
+                self.logger.error(f"无法获取视频信息，无法提取音频: {video_path}")
+                return False
+            if not video_info.get('audio_codec'):
+                self.logger.warning(f"视频不包含音轨，跳过音频提取: {video_path}")
+                return False
             
             cmd = [
                 self.ffmpeg_path,
@@ -256,6 +265,9 @@ class VideoProcessor(LoggerMixin):
             result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', creationflags=CREATE_NO_WINDOW)
             
             if result.returncode != 0:
+                if "Output file does not contain any stream" in result.stderr:
+                    self.logger.warning(f"视频不包含可提取的音频流: {video_path}")
+                    return False
                 error_msg = f"音频提取失败 (returncode: {result.returncode})\n"
                 error_msg += f"stderr: {result.stderr}\n"
                 error_msg += f"stdout: {result.stdout}"
@@ -279,8 +291,9 @@ class VideoProcessor(LoggerMixin):
             self.logger.error(f"音频提取异常: {e}")
             return False
     
-    def cut_video(self, video_path: str, output_path: str, 
-                  segments: List[Tuple[float, float]]) -> bool:
+    def cut_video(self, video_path: str, output_path: str,
+                  segments: List[Tuple[float, float]],
+                  apply_transition: bool = True) -> bool:
         """
         根据时间片段剪辑视频 (并行处理)
         
@@ -295,9 +308,6 @@ class VideoProcessor(LoggerMixin):
         if not segments:
             self.logger.error("没有提供剪辑片段")
             return False
-        
-        import tempfile
-        import shutil
         
         temp_dir = None
         try:
@@ -329,6 +339,7 @@ class VideoProcessor(LoggerMixin):
             
             # 获取并行配置
             max_workers = self.config.get('processing.max_segment_workers', 4)
+            max_workers = max(1, int(max_workers))
             pool = get_ffmpeg_pool(max_workers=max_workers)
             
             # 并行执行任务
@@ -360,7 +371,17 @@ class VideoProcessor(LoggerMixin):
             
             # 合并片段
             self.logger.info(f"开始合并 {len(segment_files)} 个片段...")
-            succ = self._concat_videos(segment_files, output_path, reencode=True) # 使用reencode以确保衔接平滑和应用统一编码
+
+            # 检查是否启用转场效果
+            transition_enabled = self.config.get('processing.transition_enabled', False) and apply_transition
+            transition_type = self.config.get('processing.transition_type', 'fade')
+            transition_duration = self.config.get('processing.transition_duration', 0.5)
+
+            if transition_enabled and len(segment_files) > 1:
+                self.logger.info(f"应用转场效果: {transition_type}, 时长: {transition_duration}秒")
+                succ = self._concat_with_transition(segment_files, output_path, transition_type, transition_duration)
+            else:
+                succ = self._concat_videos(segment_files, output_path, reencode=True) # 使用reencode以确保衔接平滑和应用统一编码
             
             if succ:
                 self.logger.info(f"视频剪辑完成: {output_path}")
@@ -453,12 +474,154 @@ class VideoProcessor(LoggerMixin):
             
         except Exception as e:
             return {
-                'success': False, 
-                'error': str(e), 
+                'success': False,
+                'error': str(e),
                 'index': args.get('index', -1)
             }
 
-    
+    def _concat_with_transition(self, video_files: List[Path], output_path: str,
+                                transition_type: str = 'fade',
+                                transition_duration: float = 0.5) -> bool:
+        """
+        使用转场效果合并多个视频文件
+
+        Args:
+            video_files: 视频文件路径列表
+            output_path: 输出文件路径
+            transition_type: 转场类型
+            transition_duration: 转场时长（秒）
+
+        Returns:
+            是否成功
+        """
+        import tempfile
+        import shutil
+
+        if len(video_files) < 2:
+            # 只有一个或零个文件，直接复制
+            if len(video_files) == 1:
+                shutil.copy(str(video_files[0]), output_path)
+                return True
+            return False
+
+        try:
+            # FFmpeg xfade支持的转场类型映射
+            xfade_transitions = {
+                'fade': 'fade',
+                'dissolve': 'dissolve',
+                'slide_left': 'slideleft',
+                'slide_right': 'slideright',
+                'slide_up': 'slideup',
+                'slide_down': 'slidedown',
+                'zoom_in': 'zoomin',
+                'zoom_out': 'zoomout',
+                'wipe_left': 'wipeleft',
+                'wipe_right': 'wiperight',
+            }
+
+            xfade_type = xfade_transitions.get(transition_type, 'fade')
+
+            # 获取第一个视频的属性
+            first_video_info = self.get_video_info(str(video_files[0]))
+            if not first_video_info:
+                self.logger.error("无法获取视频信息")
+                return False
+
+            fps = first_video_info.get('fps', 30)
+            width = first_video_info.get('width', 1920)
+            height = first_video_info.get('height', 1080)
+
+            transition_frames = int(fps * transition_duration)
+
+            # 对于多个视频，使用级联的xfade滤镜
+            # 逐个合并视频
+            temp_outputs = []
+
+            current_input = str(video_files[0])
+            for i in range(1, len(video_files)):
+                next_input = str(video_files[i])
+                temp_output = Path(output_path).parent / f"temp_merge_{i}.mp4"
+
+                # 构建xfade滤镜
+                # 格式: [0:v][1:v]xfade=transition=fade:duration=0.5:offset=offset_time[v]
+                # offset_time = 第一个视频的时长 - 转场时长
+
+                # 获取第一个视频的时长
+                if i == 1:
+                    first_duration = first_video_info.get('duration', transition_duration + 1)
+                else:
+                    first_duration = self.get_video_info(current_input).get('duration', transition_duration + 1)
+
+                offset_time = max(0, first_duration - transition_duration)
+
+                current_info = self.get_video_info(current_input) or {}
+                next_info = self.get_video_info(next_input) or {}
+                has_audio = bool(current_info.get('audio_codec') and next_info.get('audio_codec'))
+
+                filter_parts = [
+                    f'[0:v][1:v]xfade=transition={xfade_type}:duration={transition_duration}:offset={offset_time}[v]'
+                ]
+                if has_audio:
+                    filter_parts.append(
+                        f'[0:a][1:a]acrossfade=d={transition_duration}:c1=tri:c2=tri[a]'
+                    )
+
+                # FFmpeg命令
+                cmd = [
+                    self.ffmpeg_path,
+                    '-i', current_input,
+                    '-i', next_input,
+                    '-filter_complex',
+                    ';'.join(filter_parts),
+                    '-map', '[v]',
+                ]
+                if has_audio:
+                    cmd.extend(['-map', '[a]'])
+
+                # 获取编码参数
+                cmd.extend(self._get_encoding_args(reencode=True))
+
+                cmd.extend([
+                    '-y',
+                    str(temp_output)
+                ])
+
+                result = subprocess.run(cmd, capture_output=True, encoding='utf-8',
+                                      errors='ignore', creationflags=CREATE_NO_WINDOW)
+
+                if result.returncode != 0:
+                    self.logger.warning(f"转场合并失败 (片段{i}), 回退到普通合并: {result.stderr[-200:]}")
+                    # 转场失败，使用普通合并
+                    return self._concat_videos(video_files, output_path, reencode=True)
+
+                if not temp_output.exists():
+                    self.logger.error(f"转场合并输出文件不存在: {temp_output}")
+                    return self._concat_videos(video_files, output_path, reencode=True)
+
+                temp_outputs.append(temp_output)
+                current_input = str(temp_output)
+
+            # 最后一个临时文件就是最终输出
+            if temp_outputs:
+                shutil.move(str(temp_outputs[-1]), output_path)
+                # 清理所有临时文件
+                for temp_file in temp_outputs[:-1]:
+                    try:
+                        temp_file.unlink()
+                    except:
+                        pass
+            else:
+                # 只有两个视频，current_input已经是最终输出
+                if current_input != str(video_files[0]):
+                    shutil.move(current_input, output_path)
+
+            self.logger.info(f"转场合并完成: {output_path}")
+            return True
+
+        except Exception as e:
+            self.logger.warning(f"转场合并异常: {e}, 回退到普通合并")
+            return self._concat_videos(video_files, output_path, reencode=True)
+
     def _concat_videos(self, video_files: List[Path], output_path: str, reencode: bool = False) -> bool:
         """
         合并多个视频文件
@@ -482,16 +645,22 @@ class VideoProcessor(LoggerMixin):
                     self.logger.error(f"视频文件为空: {video_file}")
                     return False
             
-            # 创建文件列表
-            concat_file = Path(output_path).parent / "concat_list.txt"
-            
-            with open(concat_file, 'w', encoding='utf-8') as f:
+            # 创建唯一的concat列表文件，避免并发冲突
+            with tempfile.NamedTemporaryFile(
+                mode='w',
+                suffix='.txt',
+                prefix='concat_',
+                dir=Path(output_path).parent,
+                delete=False,
+                encoding='utf-8'
+            ) as temp_concat:
+                concat_file = Path(temp_concat.name)
                 for video_file in video_files:
                     # FFmpeg concat需要使用绝对路径，并且路径中的反斜杠需要转义
                     abs_path = str(video_file.absolute()).replace('\\', '/')
                     # 对路径中的单引号进行转义，避免FFmpeg解析错误
                     escaped_path = abs_path.replace("'", "'\\''")
-                    f.write(f"file '{escaped_path}'\n")
+                    temp_concat.write(f"file '{escaped_path}'\n")
             
             # 验证concat文件创建成功
             if not concat_file.exists():

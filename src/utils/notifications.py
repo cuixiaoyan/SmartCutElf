@@ -7,12 +7,15 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
+from utils.logger import setup_logger
 
 # Windows上隐藏subprocess控制台窗口
 if sys.platform == 'win32':
     CREATE_NO_WINDOW = 0x08000000
 else:
     CREATE_NO_WINDOW = 0
+
+logger = setup_logger()
 
 
 class SystemNotifier:
@@ -84,7 +87,7 @@ class SystemNotifier:
                 creationflags=CREATE_NO_WINDOW
             )
         except Exception as e:
-            print(f"发送通知失败: {e}")
+            logger.warning(f"发送通知失败: {e}")
     
     @staticmethod
     def _notify_linux(title: str, message: str):
@@ -121,7 +124,7 @@ class FileOperations:
                     subprocess.run(['xdg-open', str(path)], creationflags=CREATE_NO_WINDOW)
             return True
         except Exception as e:
-            print(f"打开文件夹失败: {e}")
+            logger.warning(f"打开文件夹失败: {e}")
             return False
     
     @staticmethod
@@ -142,7 +145,7 @@ class FileOperations:
                     subprocess.run(['xdg-open', str(path)], creationflags=CREATE_NO_WINDOW)
             return True
         except Exception as e:
-            print(f"打开文件失败: {e}")
+            logger.warning(f"打开文件失败: {e}")
             return False
     
     @staticmethod
@@ -164,7 +167,7 @@ class FileOperations:
                     subprocess.run(['xdg-open', str(path.parent)], creationflags=CREATE_NO_WINDOW)
             return True
         except Exception as e:
-            print(f"显示文件失败: {e}")
+            logger.warning(f"显示文件失败: {e}")
             return False
 
 
@@ -180,7 +183,7 @@ class QuickActions:
             clipboard.setText(text)
             return True
         except Exception as e:
-            print(f"复制到剪贴板失败: {e}")
+            logger.warning(f"复制到剪贴板失败: {e}")
             return False
     
     @staticmethod

@@ -8,6 +8,10 @@ import json
 import yaml
 from pathlib import Path
 from typing import Any, Dict
+from utils.logger import setup_logger
+
+
+logger = setup_logger()
 
 
 class Config:
@@ -24,21 +28,29 @@ class Config:
         # 处理设置
         "processing": {
             "max_workers": 4,
+            "max_segment_workers": 4,
             "target_duration_min": 180,  # 3分钟
             "target_duration_max": 300,  # 5分钟
             "segment_duration": 10,  # 片段分析时长（秒）
-            "auto_delete_temp": True
+            "auto_delete_temp": True,
+            "orientation": "original",
+            "transition_enabled": True,
+            "transition_type": "fade",
+            "transition_duration": 0.5
         },
         
         # 输出设置
         "output": {
             "folder": "output",
+            "auto_open": False,
             "format": "mp4",
             "resolution": "1080p",
             "fps": 30,
             "video_codec": "libx264",
             "audio_codec": "aac",
-            "bitrate": "5000k"
+            "bitrate": "5000k",
+            "preset": "medium",
+            "crf": 23
         },
         
         # 高光检测设置
@@ -74,6 +86,12 @@ class Config:
             "theme": "light",  # light, dark
             "window_width": 1200,
             "window_height": 800
+        },
+
+        # 路径设置
+        "paths": {
+            "ffmpeg": "",
+            "ffprobe": ""
         },
         
         # 性能设置
@@ -116,12 +134,12 @@ class Config:
                         self.config = yaml.safe_load(f)
                     else:
                         self.config = json.load(f)
-                print(f"配置已加载: {self.config_file}")
+                logger.info(f"配置已加载: {self.config_file}")
             except Exception as e:
-                print(f"加载配置失败: {e}，使用默认配置")
+                logger.warning(f"加载配置失败: {e}，使用默认配置")
                 self.config = self.DEFAULT_CONFIG.copy()
         else:
-            print("配置文件不存在，使用默认配置")
+            logger.info("配置文件不存在，使用默认配置")
             self.config = self.DEFAULT_CONFIG.copy()
             self.save()
     
@@ -136,9 +154,9 @@ class Config:
                     yaml.dump(self.config, f, allow_unicode=True, default_flow_style=False)
                 else:
                     json.dump(self.config, f, ensure_ascii=False, indent=2)
-            print(f"配置已保存: {self.config_file}")
+            logger.info(f"配置已保存: {self.config_file}")
         except Exception as e:
-            print(f"保存配置失败: {e}")
+            logger.error(f"保存配置失败: {e}")
     
     def get(self, key_path: str, default: Any = None) -> Any:
         """
@@ -162,13 +180,14 @@ class Config:
         
         return value
     
-    def set(self, key_path: str, value: Any):
+    def set(self, key_path: str, value: Any, permanent: bool = False):
         """
         设置配置值
         
         Args:
             key_path: 配置键路径
             value: 配置值
+            permanent: 是否立即保存到配置文件
         """
         keys = key_path.split('.')
         config = self.config
@@ -179,6 +198,9 @@ class Config:
             config = config[key]
         
         config[keys[-1]] = value
+
+        if permanent:
+            self.save()
     
     def reset_to_default(self):
         """重置为默认配置"""

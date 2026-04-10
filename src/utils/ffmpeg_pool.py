@@ -5,7 +5,7 @@ FFmpeg进程池
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from typing import Callable, List, Any, Dict
-import functools
+from threading import Lock
 from utils.logger import LoggerMixin
 
 
@@ -127,9 +127,10 @@ class FFmpegPool(LoggerMixin):
 
 # 全局单例
 _global_pool = None
+_pool_lock = Lock()
 
 
-def get_ffmpeg_pool(max_workers: int = 2) -> FFmpegPool:
+def get_ffmpeg_pool(max_workers: int = 2, use_processes: bool = False) -> FFmpegPool:
     """
     获取全局FFmpeg进程池单例
     
@@ -140,6 +141,16 @@ def get_ffmpeg_pool(max_workers: int = 2) -> FFmpegPool:
         FFmpegPool实例
     """
     global _global_pool
-    if _global_pool is None:
-        _global_pool = FFmpegPool(max_workers=max_workers)
-    return _global_pool
+    with _pool_lock:
+        needs_recreate = (
+            _global_pool is None or
+            _global_pool.max_workers != max_workers or
+            isinstance(_global_pool.executor, ProcessPoolExecutor) != use_processes
+        )
+
+        if needs_recreate:
+            if _global_pool is not None:
+                _global_pool.shutdown(wait=True)
+            _global_pool = FFmpegPool(max_workers=max_workers, use_processes=use_processes)
+
+        return _global_pool

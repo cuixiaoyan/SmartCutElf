@@ -61,7 +61,6 @@ class SpeechRecognizer(LoggerMixin):
         
         try:
             self.logger.info(f"开始转录音频: {audio_path}")
-            print(f"DEBUG: 开始转录音频: {audio_path}")
             
             # 检查文件是否存在
             if not Path(audio_path).exists():
@@ -78,7 +77,6 @@ class SpeechRecognizer(LoggerMixin):
             
             segment_count = len(result.get('segments', []))
             self.logger.info(f"转录完成，识别到 {segment_count} 个片段")
-            print(f"DEBUG: 转录完成，识别到 {segment_count} 个片段")
             
             if segment_count == 0:
                 self.logger.warning("Whisper返回了0个片段")

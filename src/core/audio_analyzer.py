@@ -206,6 +206,22 @@ class AudioAnalyzer(LoggerMixin):
         """
         try:
             sample_rate, audio_data = self.load_audio(audio_path)
+            return self.calculate_audio_score_from_data(audio_data, sample_rate, start_time, end_time)
+            
+        except Exception as e:
+            self.logger.error(f"计算音频分数失败: {e}")
+            return 0.0
+
+    def calculate_audio_score_from_data(self, audio_data: np.ndarray,
+                                      sample_rate: int,
+                                      start_time: float,
+                                      end_time: float) -> float:
+        """
+        基于已加载的音频数据计算片段分数，避免重复读取文件。
+        """
+        try:
+            if sample_rate <= 0 or audio_data is None or len(audio_data) == 0:
+                return 0.0
             
             # 提取片段
             start_sample = int(start_time * sample_rate)

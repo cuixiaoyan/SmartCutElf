@@ -8,9 +8,10 @@ import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
+from utils.logger import LoggerMixin
 
 
-class TempFileManager:
+class TempFileManager(LoggerMixin):
     """临时文件管理器"""
     
     def __init__(self, app_name: str = "SmartCutElf"):
@@ -20,6 +21,7 @@ class TempFileManager:
         Args:
             app_name: 应用名称，用于创建临时目录
         """
+        super().__init__()
         self.app_name = app_name
         self.temp_root = Path(tempfile.gettempdir()) / app_name
         self.temp_root.mkdir(parents=True, exist_ok=True)
@@ -110,7 +112,7 @@ class TempFileManager:
                                 cleaned_count += 1
                                 cleaned_size += file_size
                             except Exception as e:
-                                print(f"删除文件失败 {item}: {e}")
+                                self.logger.warning(f"删除文件失败 {item}: {e}")
             else:
                 # 清理所有文件
                 if subdir:
@@ -128,7 +130,7 @@ class TempFileManager:
                                 cleaned_count += 1
                                 cleaned_size += dir_size
                         except Exception as e:
-                            print(f"删除失败 {item}: {e}")
+                            self.logger.warning(f"删除失败 {item}: {e}")
                 else:
                     # 清理整个临时目录（保留目录结构）
                     for subdir_item in target_dir.iterdir():
@@ -139,14 +141,14 @@ class TempFileManager:
                                 cleaned_count += 1
                                 cleaned_size += dir_size
                             except Exception as e:
-                                print(f"删除目录失败 {subdir_item}: {e}")
+                                self.logger.warning(f"删除目录失败 {subdir_item}: {e}")
             
             if cleaned_count > 0:
                 size_mb = cleaned_size / (1024 * 1024)
-                print(f"✅ 清理完成: {cleaned_count} 项, {size_mb:.2f} MB")
+                self.logger.info(f"清理完成: {cleaned_count} 项, {size_mb:.2f} MB")
         
         except Exception as e:
-            print(f"清理临时文件时出错: {e}")
+            self.logger.error(f"清理临时文件时出错: {e}")
     
     def get_temp_size(self, subdir: str = "") -> tuple[int, int]:
         """

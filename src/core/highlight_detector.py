@@ -1,40 +1,60 @@
 """
 高光检测引擎
 综合音频和视频分析，智能检测精彩片段
+支持策略模式，为不同类型视频提供定制化检测
 """
 
 import numpy as np
-from typing import List, Dict, Tuple
+import cv2
+from typing import List, Dict, Tuple, Optional
 from pathlib import Path
 from core.audio_analyzer import AudioAnalyzer
 from core.video_analyzer import VideoAnalyzer
 from core.video_processor import VideoProcessor
+from core.detection_strategies import (
+    DetectionStrategy, StrategyFactory, VideoType,
+    GenericDetectionStrategy, VideoTypeDetector
+)
 from utils.logger import LoggerMixin
 from utils.temp_file_manager import get_temp_manager
 
 
 class HighlightDetector(LoggerMixin):
     """高光检测器"""
-    
-    def __init__(self, audio_weight: float = 0.4, 
+
+    def __init__(self, audio_weight: float = 0.4,
                  video_weight: float = 0.4,
-                 time_weight: float = 0.2):
+                 time_weight: float = 0.2,
+                 strategy: Optional[DetectionStrategy] = None):
         """
         初始化高光检测器
-        
+
         Args:
-            audio_weight: 音频权重
-            video_weight: 视频权重
-            time_weight: 时间分布权重
+            audio_weight: 音频权重（仅在未指定策略时使用）
+            video_weight: 视频权重（仅在未指定策略时使用）
+            time_weight: 时间分布权重（仅在未指定策略时使用）
+            strategy: 检测策略，如果为None则使用默认权重
         """
         super().__init__()
-        self.audio_weight = audio_weight
-        self.video_weight = video_weight
-        self.time_weight = time_weight
-        
+
+        # 策略模式支持
+        self.strategy = strategy
+        if strategy:
+            weights = strategy.get_weights()
+            self.audio_weight = weights['audio_weight']
+            self.video_weight = weights['video_weight']
+            self.time_weight = weights['time_weight']
+            self.logger.info(f"使用策略: {strategy.strategy_name}")
+        else:
+            self.audio_weight = audio_weight
+            self.video_weight = video_weight
+            self.time_weight = time_weight
+            self.logger.info("使用默认权重配置")
+
         self.audio_analyzer = AudioAnalyzer()
         self.video_analyzer = VideoAnalyzer()
         self.video_processor = VideoProcessor()
+        self.type_detector = VideoTypeDetector()
     
     def analyze_video(self, video_path: str, segment_duration: float = 10.0) -> List[Dict]:
         """
@@ -79,6 +99,15 @@ class HighlightDetector(LoggerMixin):
             return []
         
         try:
+            sample_rate, audio_data = self.audio_analyzer.load_audio(str(temp_audio_path))
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                self.logger.error(f"无法打开视频进行分析: {video_path}")
+                return []
+
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
             # 分段分析
             segments = []
             num_segments = int(np.ceil(total_duration / segment_duration))
@@ -89,12 +118,29 @@ class HighlightDetector(LoggerMixin):
                 
                 # 计算综合分数
                 score = self.calculate_segment_score(
-                    video_path, 
+                    video_path,
                     str(temp_audio_path),
                     start_time, 
                     end_time, 
-                    total_duration
+                    total_duration,
+                    audio_data=audio_data,
+                    sample_rate=sample_rate,
+                    video_capture=cap,
+                    fps=fps,
+                    total_frames=total_frames
                 )
+
+                context = {
+                    'video_type': self.strategy.strategy_name if self.strategy else None,
+                    'total_duration': total_duration
+                }
+                score = self.strategy.adjust_score(score, {
+                    'index': i,
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'duration': end_time - start_time,
+                    'score': score
+                }, context) if self.strategy else score
                 
                 segments.append({
                     'index': i,
@@ -113,6 +159,12 @@ class HighlightDetector(LoggerMixin):
             return segments
             
         finally:
+            try:
+                if 'cap' in locals() and cap is not None:
+                    cap.release()
+            except Exception as e:
+                self.logger.warning(f"释放视频句柄失败: {e}")
+
             # 确保清理临时文件
             try:
                 if temp_audio_path.exists():
@@ -123,7 +175,12 @@ class HighlightDetector(LoggerMixin):
     
     def calculate_segment_score(self, video_path: str, audio_path: str,
                                start_time: float, end_time: float,
-                               total_duration: float) -> float:
+                               total_duration: float,
+                               audio_data=None,
+                               sample_rate: int = None,
+                               video_capture=None,
+                               fps: float = None,
+                               total_frames: int = 0) -> float:
         """
         计算单个片段的综合分数
         
@@ -138,14 +195,24 @@ class HighlightDetector(LoggerMixin):
             综合分数（0-1）
         """
         # 音频分数
-        audio_score = self.audio_analyzer.calculate_audio_score(
-            audio_path, start_time, end_time
-        )
+        if audio_data is not None and sample_rate:
+            audio_score = self.audio_analyzer.calculate_audio_score_from_data(
+                audio_data, sample_rate, start_time, end_time
+            )
+        else:
+            audio_score = self.audio_analyzer.calculate_audio_score(
+                audio_path, start_time, end_time
+            )
         
         # 视频分数
-        video_score = self.video_analyzer.calculate_video_score(
-            video_path, start_time, end_time
-        )
+        if video_capture is not None:
+            video_score = self.video_analyzer.calculate_video_score_from_capture(
+                video_capture, fps or 0, start_time, end_time, total_frames
+            )
+        else:
+            video_score = self.video_analyzer.calculate_video_score(
+                video_path, start_time, end_time
+            )
         
         # 时间位置分数（避免过度偏向开头和结尾）
         time_position = (start_time + end_time) / 2
@@ -192,6 +259,17 @@ class HighlightDetector(LoggerMixin):
                 valid_segments = segments  # 最后手段：使用所有片段
         
         # 按分数排序
+        if self.strategy:
+            context = {
+                'target_duration': target_duration,
+                'min_segment_duration': min_segment_duration
+            }
+            valid_segments = [s for s in valid_segments if self.strategy.should_include_segment(s, context)]
+
+        if not valid_segments:
+            self.logger.warning("策略过滤后没有可用片段，回退为按分数选择")
+            valid_segments = [s for s in segments if s['duration'] >= min_segment_duration] or segments
+
         sorted_segments = sorted(valid_segments, key=lambda x: x['score'], reverse=True)
         
         self.logger.debug(f"有效片段数: {len(valid_segments)}, 最高分数: {sorted_segments[0]['score']:.3f}")
@@ -301,26 +379,28 @@ class HighlightDetector(LoggerMixin):
         self.logger.debug(f"片段合并结果: {len(segments)} -> {len(merged)} 个片段")
         return merged
     
-    def detect_highlights(self, video_path: str, 
+    def detect_highlights(self, video_path: str,
                          target_duration_min: float = 180,
                          target_duration_max: float = 300,
-                         segment_duration: float = 10.0) -> Dict:
+                         segment_duration: float = 10.0,
+                         video_type: Optional[VideoType] = None) -> Dict:
         """
         检测视频高光片段（主方法）
-        
+
         Args:
             video_path: 视频文件路径
             target_duration_min: 目标最小时长（秒）
             target_duration_max: 目标最大时长（秒）
             segment_duration: 分段时长（秒）
-            
+            video_type: 视频类型（如果为None则自动检测）
+
         Returns:
             高光检测结果
         """
         self.logger.info("="*60)
         self.logger.info(f"开始高光检测 - 目标时长: {target_duration_min}-{target_duration_max}秒")
         self.logger.info("="*60)
-        
+
         # 获取视频信息用于自适应处理
         video_info = self.video_processor.get_video_info(video_path)
         if not video_info:
@@ -328,12 +408,39 @@ class HighlightDetector(LoggerMixin):
                 'success': False,
                 'error': '无法获取视频信息'
             }
-        
+
         original_duration = video_info['duration']
         file_size_mb = video_info.get('size', 0) / (1024 * 1024)
-        
+
         self.logger.info(f"视频信息: 时长 {original_duration:.1f}s, 文件大小 {file_size_mb:.1f}MB")
-        
+
+        # 自动检测或使用指定的视频类型
+        if video_type is None:
+            video_path_obj = Path(video_path)
+            video_type = self.type_detector.detect_type(
+                video_path,
+                video_info,
+                video_path_obj.name
+            )
+
+        self.logger.info(f"检测到的视频类型: {video_type.value}")
+
+        # 根据视频类型创建或使用策略
+        if self.strategy is None or self.strategy.strategy_name == "Base":
+            self.strategy = StrategyFactory.create_strategy(video_type)
+            # 更新权重
+            weights = self.strategy.get_weights()
+            self.audio_weight = weights['audio_weight']
+            self.video_weight = weights['video_weight']
+            self.time_weight = weights['time_weight']
+            self.logger.info(f"应用策略 {self.strategy.strategy_name}: "
+                           f"音频={self.audio_weight}, 视频={self.video_weight}, 时间={self.time_weight}")
+
+        # 获取策略参数
+        strategy_params = self.strategy.get_detection_params(video_info)
+        if segment_duration == 10.0:  # 如果用户未指定，使用策略推荐值
+            segment_duration = strategy_params.get('segment_duration', 10.0)
+
         # 自适应调整目标时长
         adjusted_min, adjusted_max = self._adjust_target_duration(
             original_duration, file_size_mb, target_duration_min, target_duration_max

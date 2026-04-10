@@ -33,13 +33,23 @@ class SettingsDialog(QDialog):
         
     def _init_ui(self):
         """初始化UI"""
-        self.setWindowTitle("⚙️ 设置")
+        self.setWindowTitle("偏好设置")
         self.setMinimumWidth(750)
         self.setMinimumHeight(550)
+        self.setObjectName("SettingsShell")
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(14)
+
+        title = QLabel("偏好设置")
+        title.setObjectName("HeroTitle")
+        layout.addWidget(title)
+
+        subtitle = QLabel("调整输出、剪辑节奏、AI 模型与性能策略，让每次批处理更贴近你的素材风格。")
+        subtitle.setObjectName("HeroSubtitle")
+        subtitle.setWordWrap(True)
+        layout.addWidget(subtitle)
         
         # 选项卡
         self.tabs = QTabWidget()
@@ -58,9 +68,10 @@ class SettingsDialog(QDialog):
         self.btn_cancel.setMinimumWidth(90)
         self.btn_cancel.setProperty("secondary", True)
         
-        self.btn_save = QPushButton("✔️ 保存")
+        self.btn_save = QPushButton("保存设置")
         self.btn_save.clicked.connect(self.save_settings)
         self.btn_save.setMinimumWidth(90)
+        self.btn_save.setProperty("primary", True)
         
         btn_layout.addWidget(self.btn_cancel)
         btn_layout.addWidget(self.btn_save)
@@ -71,12 +82,13 @@ class SettingsDialog(QDialog):
     def _create_general_tab(self):
         """创建常规设置标签页"""
         widget = QWidget()
+        widget.setObjectName("SettingsPage")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
         
         # 输出设置
-        group_output = QGroupBox("💾 输出设置")
+        group_output = QGroupBox("输出设置")
         form_output = QFormLayout(group_output)
         form_output.setSpacing(10)
         form_output.setContentsMargins(12, 16, 12, 12)
@@ -84,7 +96,7 @@ class SettingsDialog(QDialog):
         output_layout = QHBoxLayout()
         output_layout.setSpacing(8)
         self.input_output_dir = QLineEdit()
-        self.btn_browse_output = QPushButton("📂 浏览...")
+        self.btn_browse_output = QPushButton("浏览...")
         self.btn_browse_output.setMinimumWidth(90)
         self.btn_browse_output.clicked.connect(self._browse_output_dir)
         output_layout.addWidget(self.input_output_dir)
@@ -99,7 +111,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(group_output)
         
         # 环境设置
-        group_env = QGroupBox("🔧 环境设置")
+        group_env = QGroupBox("环境设置")
         form_env = QFormLayout(group_env)
         form_env.setSpacing(10)
         form_env.setContentsMargins(12, 16, 12, 12)
@@ -108,7 +120,7 @@ class SettingsDialog(QDialog):
         ffmpeg_layout.setSpacing(8)
         self.input_ffmpeg_path = QLineEdit()
         self.input_ffmpeg_path.setPlaceholderText("系统默认 (自动查找)")
-        self.btn_browse_ffmpeg = QPushButton("📂 浏览...")
+        self.btn_browse_ffmpeg = QPushButton("浏览...")
         self.btn_browse_ffmpeg.setMinimumWidth(90)
         self.btn_browse_ffmpeg.clicked.connect(self._browse_ffmpeg_path)
         ffmpeg_layout.addWidget(self.input_ffmpeg_path)
@@ -126,16 +138,18 @@ class SettingsDialog(QDialog):
     def _create_processing_tab(self):
         """创建剪辑设置标签页"""
         scroll = QScrollArea()
+        scroll.setObjectName("SettingsScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.NoFrame)
         
         widget = QWidget()
+        widget.setObjectName("SettingsPage")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
         
         # 视频参数
-        group_video = QGroupBox("🎥 视频参数")
+        group_video = QGroupBox("视频参数")
         form_video = QFormLayout(group_video)
         form_video.setSpacing(10)
         form_video.setContentsMargins(12, 16, 12, 12)
@@ -151,7 +165,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(group_video)
         
         # 时长控制
-        group_duration = QGroupBox("⏱️ 时长控制 (秒)")
+        group_duration = QGroupBox("时长控制（秒）")
         form_duration = QFormLayout(group_duration)
         form_duration.setSpacing(10)
         form_duration.setContentsMargins(12, 16, 12, 12)
@@ -171,7 +185,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(group_duration)
         
         # 转场效果设置
-        group_transition = QGroupBox("🎬 转场效果")
+        group_transition = QGroupBox("转场效果")
         form_transition = QFormLayout(group_transition)
         form_transition.setSpacing(10)
         form_transition.setContentsMargins(12, 16, 12, 12)
@@ -196,7 +210,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(group_transition)
         
         # 性能设置
-        group_perf = QGroupBox("⚡ 性能设置")
+        group_perf = QGroupBox("性能设置")
         form_perf = QFormLayout(group_perf)
         form_perf.setSpacing(10)
         form_perf.setContentsMargins(12, 16, 12, 12)
@@ -214,16 +228,18 @@ class SettingsDialog(QDialog):
     def _create_ai_tab(self):
         """创建AI设置标签页"""
         scroll = QScrollArea()
+        scroll.setObjectName("SettingsScroll")
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.NoFrame)
         
         widget = QWidget()
+        widget.setObjectName("SettingsPage")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(12)
         
         # 语音识别
-        group_whisper = QGroupBox("🎙️ 语音识别 (Whisper)")
+        group_whisper = QGroupBox("语音识别（Whisper）")
         form_whisper = QFormLayout(group_whisper)
         form_whisper.setSpacing(10)
         form_whisper.setContentsMargins(12, 16, 12, 12)
@@ -238,7 +254,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(group_whisper)
         
         # 配音设置
-        group_tts = QGroupBox("🔊 配音设置")
+        group_tts = QGroupBox("配音设置")
         form_tts = QFormLayout(group_tts)
         form_tts.setSpacing(10)
         form_tts.setContentsMargins(12, 16, 12, 12)
@@ -258,7 +274,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(group_tts)
         
         # 高光检测权重
-        group_highlight = QGroupBox("✨ 高光检测权重")
+        group_highlight = QGroupBox("高光检测权重")
         form_highlight = QFormLayout(group_highlight)
         form_highlight.setSpacing(10)
         form_highlight.setContentsMargins(12, 16, 12, 12)

@@ -8,6 +8,10 @@ import numpy as np
 from pathlib import Path
 from typing import Tuple, Optional
 from enum import Enum
+from utils.logger import setup_logger
+
+
+logger = setup_logger()
 
 
 class TransitionType(Enum):
@@ -292,7 +296,7 @@ class TransitionManager:
             return True
             
         except Exception as e:
-            print(f"转场效果应用失败: {e}")
+            logger.error(f"转场效果应用失败: {e}")
             return False
     
     @staticmethod

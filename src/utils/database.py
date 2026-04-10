@@ -84,12 +84,20 @@ class DatabaseManager:
             ''')
             
             conn.commit()
+
+    def _configure_connection(self, conn: sqlite3.Connection):
+        """配置SQLite连接，提升并发读写稳定性。"""
+        conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA foreign_keys = ON')
+        conn.execute('PRAGMA journal_mode = WAL')
+        conn.execute('PRAGMA synchronous = NORMAL')
+        conn.execute('PRAGMA busy_timeout = 5000')
     
     @contextmanager
     def get_connection(self):
         """获取数据库连接上下文管理器"""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = sqlite3.connect(self.db_path, timeout=5.0)
+        self._configure_connection(conn)
         try:
             yield conn
         finally:
@@ -250,6 +258,89 @@ class DatabaseManager:
                     result['subtitles'] = json.loads(result['subtitles'])
                 return result
             return None
+
+    def get_all_processing_history(self, limit: int = 100) -> List[Dict]:
+        """
+        获取所有处理历史记录
+
+        Args:
+            limit: 最大返回条数
+
+        Returns:
+            处理历史列表
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT
+                    pr.id,
+                    pr.output_path,
+                    pr.processing_time,
+                    pr.highlights,
+                    pr.created_at,
+                    f.file_name,
+                    f.file_path,
+                    f.duration,
+                    f.status,
+                    p.name as project_name
+                FROM processing_results pr
+                LEFT JOIN files f ON pr.file_id = f.id
+                LEFT JOIN projects p ON f.project_id = p.id
+                ORDER BY pr.created_at DESC
+                LIMIT ?
+            ''', (limit,))
+            results = []
+            for row in cursor.fetchall():
+                result = dict(row)
+                if result.get('highlights'):
+                    result['highlights'] = json.loads(result['highlights'])
+                results.append(result)
+            return results
+
+    def get_all_projects(self) -> List[Dict]:
+        """
+        获取所有项目
+
+        Returns:
+            项目列表
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT p.*,
+                       COUNT(f.id) as file_count,
+                       SUM(CASE WHEN f.status = 'completed' THEN 1 ELSE 0 END) as completed_count
+                FROM projects p
+                LEFT JOIN files f ON p.id = f.project_id
+                GROUP BY p.id
+                ORDER BY p.created_at DESC
+            ''')
+            return [dict(row) for row in cursor.fetchall()]
+
+    def delete_project(self, project_id: int):
+        """
+        删除项目及其相关数据
+
+        Args:
+            project_id: 项目ID
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # 删除相关的处理结果
+            cursor.execute('''
+                DELETE FROM processing_results
+                WHERE file_id IN (SELECT id FROM files WHERE project_id = ?)
+            ''', (project_id,))
+            # 删除相关的错误日志
+            cursor.execute('''
+                DELETE FROM error_logs
+                WHERE file_id IN (SELECT id FROM files WHERE project_id = ?)
+            ''', (project_id,))
+            # 删除文件记录
+            cursor.execute('DELETE FROM files WHERE project_id = ?', (project_id,))
+            # 删除项目
+            cursor.execute('DELETE FROM projects WHERE id = ?', (project_id,))
+            conn.commit()
 
 
 # 全局数据库实例

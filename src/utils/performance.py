@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Optional, List
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from utils.logger import LoggerMixin
 
 
 @dataclass
@@ -112,11 +113,12 @@ class MemoryMonitor:
         return text
 
 
-class ProgressManager:
+class ProgressManager(LoggerMixin):
     """进度管理器 - 支持断点续传"""
     
     def __init__(self, cache_dir: str = "cache/progress"):
         """初始化进度管理器"""
+        super().__init__()
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.current_progress: Dict[str, ProcessingProgress] = {}
@@ -137,7 +139,7 @@ class ProgressManager:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(progress.to_dict(), f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"保存进度失败: {e}")
+            self.logger.warning(f"保存进度失败: {e}")
     
     def load_progress(self, video_path: str) -> Optional[ProcessingProgress]:
         """加载进度"""
@@ -153,7 +155,7 @@ class ProgressManager:
                 self.current_progress[video_path] = progress
                 return progress
         except Exception as e:
-            print(f"加载进度失败: {e}")
+            self.logger.warning(f"加载进度失败: {e}")
             return None
     
     def clear_progress(self, video_path: str):
@@ -175,11 +177,12 @@ class ProgressManager:
         return self._get_cache_file(video_path).exists()
 
 
-class PerformanceEstimator:
+class PerformanceEstimator(LoggerMixin):
     """性能预估器"""
     
     def __init__(self, history_file: str = "cache/performance_history.json"):
         """初始化性能预估器"""
+        super().__init__()
         self.history_file = Path(history_file)
         self.history_file.parent.mkdir(parents=True, exist_ok=True)
         self.history: List[Dict] = self._load_history()
@@ -203,7 +206,7 @@ class PerformanceEstimator:
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump(history_to_save, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            print(f"保存历史数据失败: {e}")
+            self.logger.warning(f"保存历史数据失败: {e}")
     
     def record_processing(self, file_size_mb: float, duration_sec: float, 
                          processing_time_sec: float, success: bool):
