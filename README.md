@@ -3,7 +3,8 @@
 **基于音视频分析与 AI 语音识别的智能视频剪辑工具**
 
 自动识别视频高光片段，一键生成高质量短视频。
-![undefined](https://img.meituan.net/portalweb/4e5b5cd71323cc565ebe5a49af698091690038.png)
+
+![SmartCutElf 主界面](docs/images/smartcutelf-main.png)
 
 ---
 
