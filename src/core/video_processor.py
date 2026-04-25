@@ -5,7 +5,6 @@
 
 import subprocess
 import json
-import sys
 import shutil
 import time
 import tempfile
@@ -14,12 +13,7 @@ from typing import Dict, List, Tuple, Optional
 from utils.logger import LoggerMixin
 from utils.config import get_config
 from utils.ffmpeg_pool import get_ffmpeg_pool
-
-# Windows上隐藏subprocess控制台窗口
-if sys.platform == 'win32':
-    CREATE_NO_WINDOW = 0x08000000
-else:
-    CREATE_NO_WINDOW = 0
+from utils.command_runner import run_media_command
 
 
 class VideoProcessor(LoggerMixin):
@@ -93,7 +87,7 @@ class VideoProcessor(LoggerMixin):
 
             # 检查硬件编码器是否可用
             cmd = [self.ffmpeg_path, '-encoders']
-            result = subprocess.run(cmd, capture_output=True, text=True, creationflags=CREATE_NO_WINDOW)
+            result = run_media_command(cmd, throttle=False)
             
             if config_codec in result.stdout:
                 self.encoder_name = config_codec
@@ -135,7 +129,16 @@ class VideoProcessor(LoggerMixin):
             args.extend(['-crf', str(self.config.get('output.crf', 23))])
             
         # 音频参数
-        args.extend(['-c:a', 'aac', '-b:a', '192k'])
+        bitrate = self.config.get('output.bitrate')
+        if bitrate:
+            args.extend(['-b:v', str(bitrate)])
+
+        fps = self.config.get('output.fps')
+        if fps:
+            args.extend(['-r', str(fps)])
+
+        audio_codec = self.config.get('output.audio_codec', 'aac')
+        args.extend(['-c:a', audio_codec, '-b:a', '192k'])
         
         return args
     
@@ -160,14 +163,12 @@ class VideoProcessor(LoggerMixin):
             ]
             
             # 修复Windows编码问题
-            result = subprocess.run(
+            result = run_media_command(
                 cmd, 
-                capture_output=True, 
-                text=True, 
                 encoding='utf-8',
                 errors='ignore',  # 忽略无法解码的字符
-                creationflags=CREATE_NO_WINDOW,  # 隐藏控制台窗口
-                check=True
+                check=True,
+                throttle=False
             )
             data = json.loads(result.stdout)
             
@@ -262,7 +263,7 @@ class VideoProcessor(LoggerMixin):
             
             self.logger.debug(f"音频提取命令: {' '.join(cmd)}")
             
-            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', creationflags=CREATE_NO_WINDOW)
+            result = run_media_command(cmd, encoding='utf-8', errors='ignore')
             
             if result.returncode != 0:
                 if "Output file does not contain any stream" in result.stderr:
@@ -313,8 +314,7 @@ class VideoProcessor(LoggerMixin):
         try:
             # 验证FFmpeg可用性
             try:
-                subprocess.run([self.ffmpeg_path, '-version'], 
-                             capture_output=True, timeout=10, creationflags=CREATE_NO_WINDOW)
+                run_media_command([self.ffmpeg_path, '-version'], timeout=10, throttle=False)
             except Exception as e:
                 raise Exception(f"FFmpeg检查失败: {e}")
             
@@ -338,7 +338,7 @@ class VideoProcessor(LoggerMixin):
                 tasks.append(task_args)
             
             # 获取并行配置
-            max_workers = self.config.get('processing.max_segment_workers', 4)
+            max_workers = self.config.get('processing.max_segment_workers', 2)
             max_workers = max(1, int(max_workers))
             pool = get_ffmpeg_pool(max_workers=max_workers)
             
@@ -449,8 +449,12 @@ class VideoProcessor(LoggerMixin):
             
             # 执行命令
             # 每个子进程不需要太长的超时，因为片段通常较短
-            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', 
-                                  errors='replace', timeout=300, creationflags=CREATE_NO_WINDOW)
+            result = run_media_command(
+                cmd,
+                encoding='utf-8',
+                errors='replace',
+                timeout=300
+            )
             
             if result.returncode != 0:
                 return {
@@ -586,8 +590,7 @@ class VideoProcessor(LoggerMixin):
                     str(temp_output)
                 ])
 
-                result = subprocess.run(cmd, capture_output=True, encoding='utf-8',
-                                      errors='ignore', creationflags=CREATE_NO_WINDOW)
+                result = run_media_command(cmd, encoding='utf-8', errors='ignore')
 
                 if result.returncode != 0:
                     self.logger.warning(f"转场合并失败 (片段{i}), 回退到普通合并: {result.stderr[-200:]}")
@@ -696,7 +699,7 @@ class VideoProcessor(LoggerMixin):
                     output_path
                 ]
             
-            result = subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', creationflags=CREATE_NO_WINDOW)
+            result = run_media_command(cmd, encoding='utf-8', errors='ignore')
             
             if result.returncode != 0:
                 self.logger.error(f"视频合并失败: {result.stderr}")
@@ -729,16 +732,19 @@ class VideoProcessor(LoggerMixin):
             是否成功
         """
         try:
+            escaped_subtitle_path = str(Path(subtitle_path).absolute()).replace('\\', '/')
+            escaped_subtitle_path = escaped_subtitle_path.replace(':', '\\:').replace("'", "\\'")
+
             cmd = [
                 self.ffmpeg_path,
                 '-i', video_path,
-                '-vf', f"subtitles={subtitle_path}",
-                '-c:a', 'copy',
-                '-y',
-                output_path
+                '-vf', f"subtitles='{escaped_subtitle_path}'",
             ]
-            
-            subprocess.run(cmd, capture_output=True, check=True, creationflags=CREATE_NO_WINDOW)
+
+            cmd.extend(self._get_encoding_args(reencode=True))
+            cmd.extend(['-y', output_path])
+
+            run_media_command(cmd, check=True)
             self.logger.info(f"字幕添加成功: {output_path}")
             return True
             
@@ -781,7 +787,7 @@ class VideoProcessor(LoggerMixin):
                 output_path
             ])
             
-            subprocess.run(cmd, capture_output=True, encoding='utf-8', errors='ignore', check=True, creationflags=CREATE_NO_WINDOW)
+            run_media_command(cmd, encoding='utf-8', errors='ignore', check=True)
             self.logger.info(f"视频尺寸调整成功: {output_path}")
             return True
             

@@ -5,6 +5,8 @@
 
 import os
 import time
+import uuid
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -19,6 +21,7 @@ from utils.logger import LoggerMixin
 from utils.config import get_config
 from utils.database import get_database
 from utils.file_manager import FileManager
+from utils.command_runner import cancel_active_media_commands, run_media_command
 
 
 class VideoProcessingWorkflow(LoggerMixin):
@@ -44,6 +47,7 @@ class VideoProcessingWorkflow(LoggerMixin):
         self.speech_recognizer = None
         self.subtitle_generator = None
         self.tts_engine = None
+        self.ai_lock = threading.Lock()
 
         self.is_processing = False
         self.should_stop = False
@@ -131,17 +135,19 @@ class VideoProcessingWorkflow(LoggerMixin):
             # 创建带有策略的检测器
             if video_type_enum:
                 strategy = StrategyFactory.create_strategy(video_type_enum)
-                self.highlight_detector = HighlightDetector(strategy=strategy)
+                highlight_detector = HighlightDetector(strategy=strategy)
             else:
-                # 使用默认检测器，会在detect_highlights中自动检测类型
-                if not hasattr(self, 'highlight_detector') or self.highlight_detector is None:
-                    self.highlight_detector = HighlightDetector()
+                highlight_detector = HighlightDetector(
+                    audio_weight=self.config.get('highlight.audio_weight', 0.4),
+                    video_weight=self.config.get('highlight.video_weight', 0.4),
+                    time_weight=self.config.get('highlight.time_weight', 0.2)
+                )
 
             min_duration = self.config.get('processing.target_duration_min', 180)
             max_duration = self.config.get('processing.target_duration_max', 300)
             segment_duration = self.config.get('processing.segment_duration', 10)
 
-            highlight_result = self.highlight_detector.detect_highlights(
+            highlight_result = highlight_detector.detect_highlights(
                 video_path,
                 target_duration_min=min_duration,
                 target_duration_max=max_duration,
@@ -214,12 +220,14 @@ class VideoProcessingWorkflow(LoggerMixin):
             
             resize_success = True
             if orientation == 'landscape':
+                width, height = self._get_target_dimensions(landscape=True)
                 resize_success = self.video_processor.resize_video(
-                    temp_cut_path, final_output_path, 1920, 1080
+                    temp_cut_path, final_output_path, width, height
                 )
             elif orientation == 'portrait':
+                width, height = self._get_target_dimensions(landscape=False)
                 resize_success = self.video_processor.resize_video(
-                    temp_cut_path, final_output_path, 1080, 1920
+                    temp_cut_path, final_output_path, width, height
                 )
             else:
                 # 保持原样，直接重命名
@@ -256,6 +264,18 @@ class VideoProcessingWorkflow(LoggerMixin):
                 if subtitle_result:
                     subtitle_path = subtitle_result.get('path')
                     subtitle_segments = subtitle_result.get('segments')
+                    if self.config.get('subtitle.burn_in', False):
+                        burned_output_path = self.file_manager.create_output_path(
+                            video_path, output_dir, suffix='_edited_subtitled'
+                        )
+                        if self.video_processor.add_subtitles(final_output_path, subtitle_path, burned_output_path):
+                            try:
+                                Path(final_output_path).unlink(missing_ok=True)
+                            except Exception as e:
+                                self.logger.warning(f"删除未烧录字幕版本失败: {e}")
+                            final_output_path = burned_output_path
+                        else:
+                            self.logger.warning("字幕烧录失败，保留外挂SRT字幕")
 
             # 6.5 生成配音（如果启用）
             tts_audio_path = None
@@ -270,6 +290,10 @@ class VideoProcessingWorkflow(LoggerMixin):
                     import shutil
                     shutil.move(final_output_with_tts, final_output_path)
                     self.logger.info(f"TTS配音已混入视频: {final_output_path}")
+                try:
+                    Path(tts_audio_path).unlink(missing_ok=True)
+                except Exception as e:
+                    self.logger.warning(f"清理TTS临时音频失败: {e}")
 
             # 7. 记录结果到数据库
             processing_time = time.time() - start_time
@@ -332,6 +356,7 @@ class VideoProcessingWorkflow(LoggerMixin):
         Returns:
             字幕信息字典 {'path': subtitle_path, 'segments': segments} 或 None
         """
+        temp_audio = None
         try:
             self.logger.info("开始生成字幕...")
 
@@ -344,7 +369,7 @@ class VideoProcessingWorkflow(LoggerMixin):
                 return None
 
             # 提取音频 (从输出视频提取，以匹配剪辑后的时间轴)
-            temp_audio = Path(output_video_path).parent / "temp_audio_subtitle.wav"
+            temp_audio = Path(output_video_path).parent / f"temp_audio_subtitle_{uuid.uuid4().hex}.wav"
             # 注意：这里应该使用 output_video_path 而不是 video_path
             if not self.video_processor.extract_audio(output_video_path, str(temp_audio)):
                 self.logger.warning("字幕生成阶段音频提取失败，已跳过")
@@ -356,13 +381,14 @@ class VideoProcessingWorkflow(LoggerMixin):
                 temp_audio.unlink()
                 return None
 
-            # 初始化语音识别（懒加载）
-            if not self.speech_recognizer:
-                model_size = self.config.get('speech.recognition_model', 'base')
-                self.speech_recognizer = SpeechRecognizer(model_size)
+            with self.ai_lock:
+                # 初始化语音识别（懒加载）
+                if not self.speech_recognizer:
+                    model_size = self.config.get('speech.recognition_model', 'base')
+                    self.speech_recognizer = SpeechRecognizer(model_size)
 
-            # 语音识别
-            segments = self.speech_recognizer.get_segments(str(temp_audio), language='zh')
+                # 语音识别
+                segments = self.speech_recognizer.get_segments(str(temp_audio), language='zh')
 
             if not segments:
                 self.logger.warning("未识别到语音内容")
@@ -396,6 +422,12 @@ class VideoProcessingWorkflow(LoggerMixin):
         except Exception as e:
             self.logger.error(f"字幕生成失败: {e}")
             return None
+        finally:
+            try:
+                if temp_audio and temp_audio.exists():
+                    temp_audio.unlink()
+            except Exception as e:
+                self.logger.warning(f"清理字幕临时音频失败: {e}")
 
     def _generate_tts_audio(self, subtitle_segments: List[Dict], output_video_path: str) -> Optional[str]:
         """
@@ -421,10 +453,12 @@ class VideoProcessingWorkflow(LoggerMixin):
                     'volume': 0.9,
                     'voice': self.config.get('speech.tts_voice', 'female')
                 }
-                self.tts_engine = TextToSpeech(tts_config)
+                with self.ai_lock:
+                    if not self.tts_engine:
+                        self.tts_engine = TextToSpeech(tts_config)
 
             # 生成TTS音频输出路径
-            tts_audio_path = str(Path(output_video_path).parent / "tts_audio.wav")
+            tts_audio_path = str(Path(output_video_path).parent / f"tts_audio_{uuid.uuid4().hex}.wav")
 
             # 从字幕片段生成配音
             full_text = " ".join([seg.get('text', '') for seg in subtitle_segments if seg.get('text')])
@@ -434,7 +468,10 @@ class VideoProcessingWorkflow(LoggerMixin):
                 return None
 
             # 生成语音
-            if self.tts_engine.synthesize(full_text, tts_audio_path):
+            with self.ai_lock:
+                tts_success = self.tts_engine.synthesize(full_text, tts_audio_path)
+
+            if tts_success:
                 self.logger.info(f"TTS配音生成成功: {tts_audio_path}")
                 return tts_audio_path
             else:
@@ -458,35 +495,23 @@ class VideoProcessingWorkflow(LoggerMixin):
             是否成功
         """
         try:
-            import subprocess
-            import sys
-
-            # Windows上隐藏subprocess控制台窗口
-            if sys.platform == 'win32':
-                CREATE_NO_WINDOW = 0x08000000
-            else:
-                CREATE_NO_WINDOW = 0
-
-            # 获取BGM音量设置
+            keep_original_audio = self.config.get('speech.background_music', False)
             bgm_volume = self.config.get('speech.music_volume', 30) / 100.0
 
-            # FFmpeg命令: 混合原音频和TTS音频
-            cmd = [
-                self.video_processor.ffmpeg_path,
-                '-i', video_path,
-                '-i', audio_path,
-                '-filter_complex',
-                f'[0:a][1:a]amix=inputs=2:duration=first:weights=1 {bgm_volume}[aout]',
-                '-map', '0:v',
-                '-map', '[aout]',
-                '-c:v', 'copy',
-                '-c:a', 'aac',
-                '-y',
-                output_path
-            ]
+            cmd = [self.video_processor.ffmpeg_path, '-i', video_path, '-i', audio_path]
+            if keep_original_audio:
+                cmd.extend([
+                    '-filter_complex',
+                    f'[0:a][1:a]amix=inputs=2:duration=first:weights={bgm_volume} 1[aout]',
+                    '-map', '0:v',
+                    '-map', '[aout]',
+                ])
+            else:
+                cmd.extend(['-map', '0:v', '-map', '1:a'])
 
-            result = subprocess.run(cmd, capture_output=True, encoding='utf-8',
-                                  errors='ignore', creationflags=CREATE_NO_WINDOW)
+            cmd.extend(['-c:v', 'copy', '-c:a', 'aac', '-shortest', '-y', output_path])
+
+            result = run_media_command(cmd, encoding='utf-8', errors='ignore')
 
             if result.returncode != 0:
                 self.logger.error(f"音频混合失败: {result.stderr[-200:]}")
@@ -522,7 +547,7 @@ class VideoProcessingWorkflow(LoggerMixin):
         self.should_stop = False
 
         results = []
-        max_workers = self.config.get('processing.max_workers', 4)
+        max_workers = self.config.get('processing.max_workers', 2)
         total = len(video_paths)
 
         if project_id is None and video_paths:
@@ -543,6 +568,8 @@ class VideoProcessingWorkflow(LoggerMixin):
             for future in as_completed(future_to_path):
                 if self.should_stop:
                     self.logger.info("批量处理被终止")
+                    for pending in future_to_path:
+                        pending.cancel()
                     executor.shutdown(wait=False)
                     break
                 
@@ -582,6 +609,25 @@ class VideoProcessingWorkflow(LoggerMixin):
         """停止处理"""
         self.logger.info("请求停止处理")
         self.should_stop = True
+        cancel_active_media_commands()
+
+    def _get_target_dimensions(self, landscape: bool = True) -> tuple:
+        """Return output dimensions from output.resolution and orientation."""
+        resolution = str(self.config.get('output.resolution', '1080p')).lower()
+        heights = {
+            '720p': 720,
+            '1080p': 1080,
+            '1440p': 1440,
+            '2160p': 2160,
+            '4k': 2160,
+        }
+        height = heights.get(resolution, 1080)
+        width = int(round(height * 16 / 9))
+        if width % 2:
+            width += 1
+        if landscape:
+            return width, height
+        return height, width
     
     def cleanup_temp_files(self):
         """清理临时文件"""

@@ -61,17 +61,17 @@ class ThemeManager:
             QWidget#SettingsShell {{
                 background-color: {c['surface']};
                 border: 1px solid {c['border']};
-                border-radius: 10px;
+                border-radius: 8px;
             }}
 
             QWidget#TopBar {{
-                border-radius: 6px;
+                border-radius: 8px;
             }}
 
             QWidget#LeftPanel {{
                 background-color: {c['panel']};
                 border: 1px solid {c['border']};
-                border-radius: 10px;
+                border-radius: 8px;
             }}
 
             QWidget#ToolbarGroup {{
@@ -79,10 +79,56 @@ class ThemeManager:
                 border: none;
             }}
 
+            QFrame#ToolbarSeparator {{
+                background-color: {c['border']};
+                border: none;
+            }}
+
             QWidget#SettingsPage,
             QScrollArea#SettingsScroll,
             QScrollArea#SettingsScroll > QWidget > QWidget {{
                 background-color: {c['surface']};
+            }}
+
+            QFrame#SettingsHeader {{
+                background-color: {c['surface']};
+                border-bottom: 1px solid {c['border']};
+            }}
+
+            QWidget#SettingsBody {{
+                background-color: {c['surface']};
+            }}
+
+            QFrame#SettingsFooter {{
+                background-color: {c['surface']};
+                border-top: 1px solid {c['border']};
+            }}
+
+            QFrame#SettingsNav {{
+                background-color: {c['surface_alt']};
+                border: 1px solid {c['border']};
+                border-radius: 8px;
+            }}
+
+            QPushButton[settingsNav="true"] {{
+                background-color: transparent;
+                color: {c['text_secondary']};
+                border: 1px solid transparent;
+                border-radius: 6px;
+                text-align: left;
+                padding: 0 12px;
+                font-weight: 600;
+            }}
+
+            QPushButton[settingsNav="true"]:hover {{
+                background-color: {c['surface_hover']};
+                color: {c['text']};
+            }}
+
+            QPushButton[settingsNav="true"]:checked {{
+                background-color: {c['surface']};
+                color: {c['accent']};
+                border-color: {c['border']};
             }}
 
             QLabel#HeroTitle {{
@@ -150,7 +196,7 @@ class ThemeManager:
                 background-color: {c['surface']};
                 color: {c['text']};
                 border: 1px solid {c['border']};
-                border-radius: 8px;
+                border-radius: 6px;
                 padding: 0 12px;
                 font-size: 12px;
                 font-weight: 600;
@@ -192,21 +238,48 @@ class ThemeManager:
             }}
 
             QPushButton[toggle="true"] {{
-                background-color: {c['surface_alt']};
+                background-color: transparent;
                 color: {c['text_secondary']};
+                border-color: transparent;
+                border-radius: 4px;
             }}
 
             QPushButton[toggle="true"]:checked {{
-                background-color: {c['selected']};
-                border-color: #CFE0FF;
+                background-color: {c['surface']};
+                border-color: {c['accent']};
                 color: {c['accent']};
+            }}
+
+            QPushButton[toggle="true"]:hover {{
+                background-color: {c['surface_hover']};
+                border-color: {c['border']};
+            }}
+
+            QPushButton[aiToggle="true"] {{
+                background-color: {c['surface_alt']};
+                color: {c['text_secondary']};
+                border: 1px solid {c['border']};
+                border-radius: 15px;
+                padding: 0 12px;
+                font-weight: 600;
+            }}
+
+            QPushButton[aiToggle="true"]:hover {{
+                background-color: {c['surface_hover']};
+                border-color: {c['border_strong']};
+            }}
+
+            QPushButton[aiToggle="true"]:checked {{
+                background-color: #F0F7FF;
+                color: {c['accent']};
+                border-color: #8DBBFF;
             }}
 
             QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
                 background-color: {c['surface']};
                 border: 1px solid {c['border']};
-                border-radius: 8px;
-                padding: 8px 10px;
+                border-radius: 6px;
+                padding: 6px 10px;
                 color: {c['text']};
                 selection-background-color: #D8E8FF;
             }}
@@ -229,8 +302,8 @@ class ThemeManager:
             QListWidget::item {{
                 background-color: {c['surface']};
                 border: 1px solid {c['border']};
-                border-radius: 8px;
-                padding: 10px 12px;
+                border-radius: 6px;
+                padding: 8px 12px;
                 margin: 0 0 6px 0;
             }}
 
@@ -259,11 +332,11 @@ class ThemeManager:
             }}
 
             QGroupBox {{
-                background-color: {c['surface_alt']};
+                background-color: {c['surface']};
                 border: 1px solid {c['border']};
-                border-radius: 10px;
-                margin-top: 10px;
-                padding: 12px;
+                border-radius: 8px;
+                margin-top: 8px;
+                padding: 10px;
                 font-weight: 600;
             }}
 
@@ -275,6 +348,10 @@ class ThemeManager:
                 color: {c['text_secondary']};
                 font-size: 12px;
                 font-weight: 700;
+            }}
+
+            QFormLayout QLabel {{
+                color: {c['text_secondary']};
             }}
 
             QCheckBox {{

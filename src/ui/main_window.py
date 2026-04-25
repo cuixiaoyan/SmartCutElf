@@ -8,8 +8,8 @@ from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QProgressBar, QTextEdit, QSplitter, QStatusBar, QMessageBox, QListWidgetItem,
                              QGroupBox, QCheckBox, QDialog, QApplication, QRadioButton,
                              QButtonGroup, QFrame, QStackedWidget, QSizePolicy,
-                             QGraphicsOpacityEffect)
-from PyQt5.QtCore import Qt, pyqtSignal, QThread, QMimeData, QUrl, QPropertyAnimation, QEasingCurve, QTimer
+                             QGraphicsOpacityEffect, QListView)
+from PyQt5.QtCore import Qt, pyqtSignal, QThread, QMimeData, QUrl, QPropertyAnimation, QEasingCurve, QTimer, QSize
 from PyQt5.QtGui import QDragEnterEvent, QDropEvent
 from PyQt5.QtGui import QIcon, QFont
 from pathlib import Path
@@ -81,15 +81,15 @@ class MainWindow(QMainWindow):
 
         # 获取屏幕尺寸并计算窗口大小（1/4屏幕面积，即宽高各为屏幕的1/2）
         screen = QApplication.primaryScreen().geometry()
-        width = screen.width() // 2
-        height = screen.height() // 2
+        width = min(max(1100, int(screen.width() * 0.64)), max(960, screen.width() - 80))
+        height = min(max(720, int(screen.height() * 0.68)), max(680, screen.height() - 80))
 
         # 计算居中位置 (稍微向上偏移一点，视觉上更舒适)
         x = (screen.width() - width) // 2
         y = max(0, (screen.height() - height) // 2 - 100)
 
         self.setGeometry(x, y, width, height)
-        self.setMinimumSize(1000, 700)  # 设置一个合理的最小尺寸
+        self.setMinimumSize(960, 680)
 
         # 设置窗口图标
         icon_path = Path(__file__).parent.parent.parent / 'assets' / 'app_icon.ico'
@@ -106,8 +106,8 @@ class MainWindow(QMainWindow):
 
         # 主布局
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(14, 10, 14, 14)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(12, 10, 12, 12)
+        main_layout.setSpacing(8)
 
         # 顶部工具栏
         toolbar = self._create_toolbar()
@@ -138,60 +138,48 @@ class MainWindow(QMainWindow):
         """创建工具栏"""
         container = QWidget()
         container.setObjectName("TopBar")
-        container.setFixedHeight(42)
+        container.setFixedHeight(48)
+        container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         toolbar = QHBoxLayout(container)
-        toolbar.setSpacing(6)
-        toolbar.setContentsMargins(6, 3, 6, 3)
-
-        action_group = QFrame()
-        action_group.setObjectName("ToolbarGroup")
-        action_layout = QHBoxLayout(action_group)
-        action_layout.setContentsMargins(0, 0, 0, 0)
-        action_layout.setSpacing(8)
-        action_group.setMinimumWidth(320)
+        toolbar.setSpacing(8)
+        toolbar.setContentsMargins(8, 6, 8, 6)
 
         # 统一按钮尺寸
-        btn_w, btn_h = 88, 28
+        btn_h = 32
+
+        self.btn_open_folder = QPushButton('导入目录')
+        self.btn_open_folder.setFixedSize(104, btn_h)
+        self.btn_open_folder.clicked.connect(self.open_folder)
+        toolbar.addWidget(self.btn_open_folder)
 
         # 开始处理按钮
         self.btn_start = QPushButton('开始生成')
-        self.btn_start.setFixedHeight(btn_h)
-        self.btn_start.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.btn_start.setFixedSize(112, btn_h)
         self.btn_start.setProperty("primary", True)
         self.btn_start.setEnabled(False)
         self.btn_start.clicked.connect(self.start_processing)
-        action_layout.addWidget(self.btn_start)
+        toolbar.addWidget(self.btn_start)
 
         # 停止按钮
         self.btn_stop = QPushButton('停止')
-        self.btn_stop.setFixedSize(64, btn_h)
+        self.btn_stop.setFixedSize(76, btn_h)
         self.btn_stop.setProperty("danger", True)
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self.stop_processing)
-        action_layout.addWidget(self.btn_stop)
+        toolbar.addWidget(self.btn_stop)
 
-        toolbar.addWidget(action_group)
-
-        toolbar.addSpacing(8)
-
-        option_group = QFrame()
-        option_group.setObjectName("ToolbarGroup")
-        option_layout = QHBoxLayout(option_group)
-        option_layout.setContentsMargins(0, 0, 0, 0)
-        option_layout.setSpacing(8)
-
-        # 字幕+配音开关
-        self.chk_ai_enabled = QCheckBox('字幕+配音')
-        is_enabled = self.config.get('subtitle.enabled', True) or self.config.get('speech.tts_enabled', False)
-        self.chk_ai_enabled.setChecked(is_enabled)
-        option_layout.addWidget(self.chk_ai_enabled)
+        separator = QFrame()
+        separator.setObjectName("ToolbarSeparator")
+        separator.setFixedSize(1, 26)
+        toolbar.addWidget(separator)
 
         # 预设选择
         from PyQt5.QtWidgets import QButtonGroup
         preset_label = QLabel('模式')
         preset_label.setProperty("secondary", True)
-        option_layout.addWidget(preset_label)
+        preset_label.setFixedWidth(28)
+        toolbar.addWidget(preset_label)
 
         self.preset_group = QButtonGroup(self)
         self.preset_group.setExclusive(True)
@@ -207,7 +195,7 @@ class MainWindow(QMainWindow):
                 btn.setChecked(True)
             btn.clicked.connect(lambda checked, n=display_name: self.on_preset_changed(n))
             self.preset_group.addButton(btn)
-            option_layout.addWidget(btn)
+            toolbar.addWidget(btn)
             setattr(self, f'btn_preset_{key}', btn)
 
         self.preset_group.buttonClicked.connect(self._update_preset_buttons)
@@ -216,7 +204,8 @@ class MainWindow(QMainWindow):
         from PyQt5.QtWidgets import QComboBox
         type_label = QLabel('内容类型')
         type_label.setProperty("secondary", True)
-        option_layout.addWidget(type_label)
+        type_label.setFixedWidth(52)
+        toolbar.addWidget(type_label)
 
         self.combo_video_type = QComboBox()
         self.combo_video_type.addItem("自动检测", "auto")
@@ -229,18 +218,31 @@ class MainWindow(QMainWindow):
         self.combo_video_type.addItem("通用", "generic")
         self.combo_video_type.setCurrentIndex(0)
         self.combo_video_type.setFixedHeight(btn_h)
-        self.combo_video_type.setMinimumWidth(96)
-        option_layout.addWidget(self.combo_video_type)
-
-        toolbar.addWidget(option_group)
+        self.combo_video_type.setFixedWidth(132)
+        toolbar.addWidget(self.combo_video_type)
 
         toolbar.addStretch()
 
+        # 字幕+配音开关
+        self.chk_ai_enabled = QPushButton('字幕/配音')
+        self.chk_ai_enabled.setCheckable(True)
+        self.chk_ai_enabled.setProperty("aiToggle", True)
+        is_enabled = self.config.get('subtitle.enabled', True) or self.config.get('speech.tts_enabled', False)
+        self.chk_ai_enabled.setChecked(is_enabled)
+        self.chk_ai_enabled.setFixedSize(108, btn_h)
+        toolbar.addWidget(self.chk_ai_enabled)
+
         self.btn_settings = QPushButton('设置')
-        self.btn_settings.setFixedSize(60, btn_h)
+        self.btn_settings.setFixedSize(76, btn_h)
         self.btn_settings.setToolTip('打开设置')
         self.btn_settings.clicked.connect(self.open_settings)
         toolbar.addWidget(self.btn_settings)
+
+        self.btn_close = QPushButton('关闭')
+        self.btn_close.setFixedSize(76, btn_h)
+        self.btn_close.setToolTip('关闭窗口')
+        self.btn_close.clicked.connect(self.close)
+        toolbar.addWidget(self.btn_close)
 
         return container
 
@@ -257,12 +259,15 @@ class MainWindow(QMainWindow):
         title_layout.setSpacing(8)
         title = QLabel('视频文件列表')
         title.setObjectName("SectionTitle")
+        title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         title_layout.addWidget(title)
         title_layout.addStretch()
 
         # 文件数量标签
         self.file_count_label = QLabel('0 个文件')
         self.file_count_label.setObjectName("SectionCaption")
+        self.file_count_label.setMinimumWidth(58)
+        self.file_count_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         title_layout.addWidget(self.file_count_label)
 
         layout.addLayout(title_layout)
@@ -272,6 +277,8 @@ class MainWindow(QMainWindow):
 
         self.file_list = QListWidget()
         self.file_list.setAlternatingRowColors(True)
+        self.file_list.setUniformItemSizes(True)
+        self.file_list.setResizeMode(QListView.Adjust)
         self.file_list.currentItemChanged.connect(self.on_file_selected)
 
         self.empty_files_state = self._create_empty_state(
@@ -289,6 +296,8 @@ class MainWindow(QMainWindow):
         # 文件说明
         self.file_info_label = QLabel('请选择文件夹以加载视频')
         self.file_info_label.setWordWrap(True)
+        self.file_info_label.setMinimumHeight(44)
+        self.file_info_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.file_info_label.setProperty("secondary", True)
         layout.addWidget(self.file_info_label)
 
@@ -314,6 +323,8 @@ class MainWindow(QMainWindow):
         stage_row.addWidget(self.stage_label)
         self.status_banner = QLabel("准备就绪")
         self.status_banner.setObjectName("SectionCaption")
+        self.status_banner.setWordWrap(True)
+        self.status_banner.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         stage_row.addWidget(self.status_banner)
         stage_row.addStretch()
         layout.addLayout(stage_row)
@@ -328,12 +339,10 @@ class MainWindow(QMainWindow):
         top_row.setSpacing(8)
         self.progress_label = QLabel('等待开始...')
         self.progress_label.setProperty("secondary", True)
+        self.progress_label.setWordWrap(True)
+        self.progress_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         top_row.addWidget(self.progress_label)
         top_row.addStretch()
-
-        self.progress_percent_label = QLabel('0%')
-        self.progress_percent_label.setObjectName("ProgressValue")
-        top_row.addWidget(self.progress_percent_label)
 
         stats_layout.addLayout(top_row)
 
@@ -354,6 +363,8 @@ class MainWindow(QMainWindow):
         self.status_text.setReadOnly(True)
         self.status_text.setPlaceholderText('准备就绪。\n\n从左上角导入一个目录，选择模式与内容类型，然后开始生成。处理日志会在这里按时间展开。')
         self.status_text.setFont(QFont('SF Mono', 10))
+        self.status_text.setMinimumHeight(220)
+        self.status_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.status_text)
 
         # 快捷操作按钮
@@ -572,14 +583,7 @@ class MainWindow(QMainWindow):
 
         # 更新文件列表
         for i, video_file in enumerate(self.video_files, 1):
-            size_mb = video_file['size_mb']
-            # 限制文件名长度，避免换行
-            name = video_file['name']
-            if len(name) > 30:
-                name = name[:27] + "..."
-            item_text = f"{i}. {name}\n   {size_mb:.1f} MB | {video_file['extension']}"
-            item = QListWidgetItem(item_text)
-            self.file_list.addItem(item)
+            self._add_file_list_item(i, video_file)
 
         # 更新统计信息
         count = len(self.video_files)
@@ -675,7 +679,6 @@ class MainWindow(QMainWindow):
         progress = int((current / total) * 100) if total > 0 else 0
         self.progress_bar.setValue(progress)
         self.progress_label.setText(message)
-        self.progress_percent_label.setText(f'{progress}%')
         stage_key, stage_text = self._infer_stage(message)
         self._set_stage(stage_key, stage_text)
         self.status_banner.setText(stage_text)
@@ -714,10 +717,12 @@ class MainWindow(QMainWindow):
         self.add_status_message(f"\n输出目录: {self.config.get('output.folder', 'output')}")
         self.add_status_message("="*60 + "\n")
 
+        if self.config.get('output.auto_open', False) and success_count > 0:
+            self.open_output_folder()
+
         # 更新状态栏
         self.status_bar.showMessage(f"处理完成 | 成功: {success_count} | 失败: {failed_count}")
         self.progress_label.setText('处理完成')
-        self.progress_percent_label.setText('100%')
         self._show_completion_feedback(success_count, failed_count)
 
         # 恢复按钮状态
@@ -839,15 +844,8 @@ class MainWindow(QMainWindow):
                 self.file_list.clear()
                 total_size = 0
                 for i, video_file in enumerate(self.video_files, 1):
-                    size_mb = video_file['size_mb']
-                    total_size += size_mb
-                    # 限制文件名长度，避免换行
-                    name = video_file['name']
-                    if len(name) > 30:
-                        name = name[:27] + "..."
-                    item_text = f"{i}. {name}\n   {size_mb:.1f} MB | {video_file['extension']}"
-                    item = QListWidgetItem(item_text)
-                    self.file_list.addItem(item)
+                    total_size += video_file['size_mb']
+                    self._add_file_list_item(i, video_file)
 
                 # 更新统计信息
                 count = len(self.video_files)
@@ -863,3 +861,19 @@ class MainWindow(QMainWindow):
                 self._fade_widget(self.file_list, 0.0, 1.0, 240)
 
                 event.acceptProposedAction()
+
+    def _add_file_list_item(self, index: int, video_file: dict):
+        """添加结构化文件列表项。"""
+        name = video_file['name']
+        if len(name) > 34:
+            name = name[:31] + "..."
+
+        size_mb = video_file['size_mb']
+        modified = video_file['modified'].strftime('%m-%d %H:%M')
+        item_text = (
+            f"{index:02d}  {name}\n"
+            f"     {video_file['extension']}   {size_mb:.1f} MB   {modified}   待处理"
+        )
+        item = QListWidgetItem(item_text)
+        item.setSizeHint(QSize(0, 58))
+        self.file_list.addItem(item)

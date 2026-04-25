@@ -27,8 +27,9 @@ class Config:
         
         # 处理设置
         "processing": {
-            "max_workers": 4,
-            "max_segment_workers": 4,
+            "max_workers": 2,
+            "max_segment_workers": 2,
+            "max_ffmpeg_workers": 2,
             "target_duration_min": 180,  # 3分钟
             "target_duration_max": 300,  # 5分钟
             "segment_duration": 10,  # 片段分析时长（秒）
@@ -64,6 +65,7 @@ class Config:
         # 字幕设置
         "subtitle": {
             "enabled": True,
+            "burn_in": False,
             "font_name": "Microsoft YaHei",
             "font_size": "medium",  # small, medium, large
             "font_color": "white",

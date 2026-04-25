@@ -68,7 +68,6 @@ def build_executable():
         '--exclude-module=setuptools',
         '--exclude-module=pip',
         '--exclude-module=wheel',
-        '--exclude-module=distutils',
         
         # ⚡ 排除不需要的GUI库
         '--exclude-module=tkinter',
@@ -106,9 +105,6 @@ def build_executable():
         # '--exclude-module=numpy.testing',  # ❌ 不要排除，会导致运行时错误
         '--exclude-module=scipy.testing',
         '--exclude-module=cv2.typing',
-        
-        # ⚡ 排除未使用的模块
-        '--exclude-module=pyttsx3',
         
         # 图标
         '--icon=assets/app_icon.ico',

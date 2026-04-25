@@ -3,11 +3,15 @@
 提供基于pyttsx3的本地TTS功能
 """
 
-import pyttsx3
 import os
 from pathlib import Path
 from typing import Optional, List
 from utils.logger import setup_logger
+
+try:
+    import pyttsx3
+except ImportError:
+    pyttsx3 = None
 
 
 class TextToSpeech:
@@ -25,6 +29,8 @@ class TextToSpeech:
         self.engine = None
         
         try:
+            if pyttsx3 is None:
+                raise RuntimeError("未安装pyttsx3，请执行 pip install pyttsx3 后再启用配音")
             self.engine = pyttsx3.init()
             self._configure()
             self.logger.info("TTS引擎初始化成功")

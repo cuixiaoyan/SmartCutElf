@@ -27,8 +27,9 @@ performance:
   memory_limit_mb: 2048
 processing:
   auto_delete_temp: true
-  max_workers: 4       # 总体并行视频处理数量
-  max_segment_workers: 4 # 单个视频的分段并行数量 (建议设置为CPU核心数的一半)
+  max_workers: 2       # 总体并行视频处理数量
+  max_segment_workers: 2 # 单个视频的分段并行数量
+  max_ffmpeg_workers: 2 # 全局FFmpeg最大并发数量
   orientation: original
   segment_duration: 10
   target_duration_max: 300
@@ -43,6 +44,7 @@ speech:
   tts_enabled: true
   tts_voice: female
 subtitle:
+  burn_in: false
   enabled: true
   font_color: white
   font_name: Microsoft YaHei
